@@ -1,0 +1,5 @@
+object Viewer: TViewer
+  Size.Width = 512.000000000000000000
+  Size.Height = 512.000000000000000000
+  Size.PlatformDefault = False
+end
