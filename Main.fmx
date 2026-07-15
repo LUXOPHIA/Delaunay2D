@@ -1,0 +1,55 @@
+object Form1: TForm1
+  Left = 0
+  Top = 0
+  Caption = 'Delaunay 2D'
+  ClientHeight = 512
+  ClientWidth = 642
+  Position = ScreenCenter
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  OnCreate = FormCreate
+  OnDestroy = FormDestroy
+  DesignerMasterStyle = 0
+  inline Viewer1: TDelaunayViewer
+    Align = Client
+    Size.Width = 522.000000000000000000
+    Size.Height = 512.000000000000000000
+    Size.PlatformDefault = False
+    OnMouseDown = Viewer1MouseDown
+  end
+  object Panel1: TPanel
+    Align = Right
+    Position.X = 522.000000000000000000
+    Size.Width = 120.000000000000000000
+    Size.Height = 512.000000000000000000
+    Size.PlatformDefault = False
+    StyleLookup = 'pushpanel'
+    TabOrder = 1
+    object Button1: TButton
+      Align = Top
+      Margins.Left = 8.000000000000000000
+      Margins.Top = 8.000000000000000000
+      Margins.Right = 8.000000000000000000
+      Size.Width = 104.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 0
+      Text = 'Random x100'
+      OnClick = Button1Click
+    end
+    object Button2: TButton
+      Align = Top
+      Margins.Left = 8.000000000000000000
+      Margins.Top = 8.000000000000000000
+      Margins.Right = 8.000000000000000000
+      Position.Y = 40.000000000000000000
+      Size.Width = 104.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 1
+      Text = 'Clear'
+      OnClick = Button2Click
+    end
+  end
+end
