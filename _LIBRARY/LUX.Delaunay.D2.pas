@@ -132,9 +132,8 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
        _PoinInf  :TPoin_;
        _Poins    :TObjectList<TPoin_>;
        _Faces    :TObjectList<TFace_>;
-       _OnChange :TNotifyEvent;
+       _OnChange :TDelegates;
        ///// M E T H O D
-       procedure Changed;
        function HasPoin( const Pos_:TSingle2D ) :Boolean;
        procedure InitFace;
        function FaceTree( const Poin_:TPoin_; const Face_:TFace_; const Vert_:Byte ) :TFaceJoint;
@@ -152,7 +151,7 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
        property PoinInf  :TPoin_              read _PoinInf                 ;  // 唯一の無限遠頂点
        property Poins    :TObjectList<TPoin_> read _Poins                   ;  // 有限頂点のみ
        property Faces    :TObjectList<TFace_> read _Faces                   ;
-       property OnChange :TNotifyEvent        read _OnChange write _OnChange;  // 構造が変化したときに発火
+       property OnChange :TDelegates          read _OnChange                 ;  // 構造が変化したときに発火（Add / Del で多播購読）
        ///// M E T H O D
        function HitCircleFace( const Pos_:TSingle2D ) :TFace_;
        function FindPoin( const Pos_:TSingle2D; const Radius_:Single ) :TPoin_;
@@ -363,13 +362,6 @@ end;
 
 //////////////////////////////////////////////////////////////////// M E T H O D
 
-procedure TDelaunay2D.Changed;
-begin
-     if Assigned( _OnChange ) then _OnChange( Self );
-end;
-
-//------------------------------------------------------------------------------
-
 function TDelaunay2D.HasPoin( const Pos_:TSingle2D ) :Boolean;
 var
    I :Integer;
@@ -576,10 +568,10 @@ begin
 
      case _Poins.Count of
        0: begin
-               Result := NewPoin( Pos_ );  Changed;
+               Result := NewPoin( Pos_ );  _OnChange.Run( Self );
           end;
        1: begin
-               Result := NewPoin( Pos_ );  InitFace;  Changed;
+               Result := NewPoin( Pos_ );  InitFace;  _OnChange.Run( Self );
           end;
      else
           F := HitCircleFace( Pos_ );
@@ -591,7 +583,7 @@ end;
 
 function TDelaunay2D.AddPoin( const Pos_:TSingle2D; const Face_:TFace_ ) :TPoin_;
 begin
-     Result := NewPoin( Pos_ );  InsertPoin( Result, Face_ );  Changed;
+     Result := NewPoin( Pos_ );  InsertPoin( Result, Face_ );  _OnChange.Run( Self );
 end;
 
 //------------------------------------------------------------------------------
@@ -805,7 +797,7 @@ begin
           _Poins.Remove( Poin_ );
      end;
 
-     Changed;
+     _OnChange.Run( Self );
 
      Result := True;
 end;
@@ -817,7 +809,7 @@ begin
      _Faces.Clear;
      _Poins.Clear;
 
-     Changed;
+     _OnChange.Run( Self );
 end;
 
 //------------------------------------------------------------------------------
