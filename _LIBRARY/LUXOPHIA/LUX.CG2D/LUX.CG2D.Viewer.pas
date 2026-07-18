@@ -1,4 +1,4 @@
-﻿unit LUX.CG2D.ViewerFrame;
+﻿unit LUX.CG2D.Viewer;
 
 // シーングラフの汎用ビューア（カメラ越しにシーンを描く）
 //
@@ -101,7 +101,7 @@ begin
 
                Canvas_.Scale( S, S );
 
-               V := _Camera.GlobalPose.Inverse;  // なぜか TMatrix( _Camera.GlobalPose.Inverse ) が通らない
+               V := _Camera.GlobalPose.Inverse;
 
                Canvas_.Concat( TMatrix( V ) );  // ワールド座標系 → カメラ座標系
 
