@@ -148,6 +148,19 @@
             <FormType>fmx</FormType>
             <DesignClass>TFrame</DesignClass>
         </DCCReference>
+        <DCCReference Include="_LIBRARY\LUXOPHIA\LUX.CG2D\LUX.CG2D.pas"/>
+        <DCCReference Include="_LIBRARY\LUXOPHIA\LUX.CG2D\LUX.CG2D.Shapers.pas"/>
+        <DCCReference Include="_LIBRARY\LUXOPHIA\LUX.CG2D\LUX.CG2D.ViewerFrame.pas">
+            <Form>Viewer</Form>
+            <FormType>fmx</FormType>
+            <DesignClass>TFrame</DesignClass>
+        </DCCReference>
+        <DCCReference Include="_LIBRARY\LUXOPHIA\LUX\Data\List\LUX.Data.List.pas"/>
+        <DCCReference Include="_LIBRARY\LUXOPHIA\LUX\Data\List\LUX.Data.List.core.pas"/>
+        <DCCReference Include="_LIBRARY\LUXOPHIA\LUX\Data\Tree\LUX.Data.Tree.pas"/>
+        <DCCReference Include="_LIBRARY\LUXOPHIA\LUX\LUX.D3.pas"/>
+        <DCCReference Include="_LIBRARY\LUXOPHIA\LUX\LUX.D3x3.pas"/>
+        <DCCReference Include="_LIBRARY\LUXOPHIA\LUX\LUX.D2x2.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
