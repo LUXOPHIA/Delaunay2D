@@ -14,13 +14,13 @@ type
   TForm1 = class(TForm)
     Viewer1: TDelaunayViewer;
     Panel1: TPanel;
-      Button1: TButton;
-      Button2: TButton;
+      ButtonC: TButton;
+      ButtonR: TButton;
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
     procedure Viewer1MouseDown(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Single);
-    procedure Button1Click(Sender: TObject);
-    procedure Button2Click(Sender: TObject);
+    procedure ButtonCClick(Sender: TObject);
+    procedure ButtonRClick(Sender: TObject);
   private
     { private 宣言 }
   public
@@ -43,7 +43,42 @@ procedure TForm1.FormCreate(Sender: TObject);
 begin
      _Delaunay := TDelaunay2D.Create;
 
-     Viewer1.Delaunay := _Delaunay;
+     with Viewer1 do
+     begin
+          Delaunay := _Delaunay;
+
+          with Camera do
+          begin
+               SizeX := 400;
+               SizeY := 400;
+          end;
+
+          with Poins.Style do
+          begin
+               FillColor := TAlphaColors.Red;
+               LineColor := TAlphaColors.White;
+               LineThick := 1;
+          end;
+
+          with Trias.Style do
+          begin
+               FillColor := TAlphaColors.Cornflowerblue;
+               LineColor := TAlphaColors.White;
+               LineThick := 1;
+          end;
+
+          with Circs.Style do
+          begin
+               LineColor := TAlphaColors.Lime;
+               LineThick := 0.5;
+          end;
+
+          with Volos.Style do
+          begin
+               LineColor := TAlphaColors.Black;
+               LineThick := 0.5;
+          end;
+     end;
 end;
 
 procedure TForm1.FormDestroy(Sender: TObject);
@@ -62,7 +97,7 @@ var
 begin
      P := Viewer1.ScrToPos( TPointF.Create( X, Y ) );
 
-     V := _Delaunay.FindPoin( P, 6{点の描画半径+縁} );
+     V := _Delaunay.FindPoin( P, 6 );
 
      if Assigned( V ) then _Delaunay.DeletePoin( V )   // 既存点 → 削除
                       else _Delaunay.AddPoin   ( P );  // 空白　 → 追加
@@ -70,16 +105,16 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TForm1.Button1Click(Sender: TObject);
+procedure TForm1.ButtonCClick(Sender: TObject);
+begin
+     _Delaunay.Clear;
+end;
+
+procedure TForm1.ButtonRClick(Sender: TObject);
 var
    N :Integer;
 begin
-     for N := 1 to 100 do _Delaunay.AddPoin( TSingle2D.RandG * ( Min( Viewer1.Width, Viewer1.Height ) / 4 ) );
-end;
-
-procedure TForm1.Button2Click(Sender: TObject);
-begin
-     _Delaunay.Clear;
+     for N := 1 to 100 do _Delaunay.AddPoin( 100 * TSingle2D.RandG );
 end;
 
 end. //######################################################################### ■
