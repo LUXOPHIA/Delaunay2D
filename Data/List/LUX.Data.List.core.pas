@@ -75,9 +75,9 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
        property Parent :TListParent read GetParent write SetParent;
        property Order  :Integer     read GetOrder  write SetOrder ;  // 代入は指定順位のノードとの「交換」であり、間のノードはシフトしない
        ///// M E T H O D
-       procedure Remove;
-       procedure InsertPrev( const Siblin_:TListChildr );
-       procedure InsertNext( const Siblin_:TListChildr );
+       procedure Remove; virtual;
+       procedure InsertPrev( const Siblin_:TListChildr ); virtual;
+       procedure InsertNext( const Siblin_:TListChildr ); virtual;
      end;
 
      //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TListParent
@@ -115,8 +115,8 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
        procedure _InsertTail( const Childr_:TListChildr );
        ///// E V E N T
        procedure OnInit; virtual;
-       procedure OnInsertChild( const Childr_:TListChildr ); overload; virtual;
-       procedure OnRemoveChild( const Childr_:TListChildr ); overload; virtual;
+       procedure OnInsertChildr( const Childr_:TListChildr ); overload; virtual;
+       procedure OnRemoveChildr( const Childr_:TListChildr ); overload; virtual;
      public
        constructor Create; overload; override;
        destructor Destroy; override;
@@ -131,9 +131,9 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
        property OwnereObject                :TObject     read GetOwnereObject             ;
        ///// M E T H O D
        procedure Clear; virtual;
-       procedure InsertHead( const Childr_:TListChildr ); overload;
-       procedure InsertTail( const Childr_:TListChildr ); overload;
-       procedure Add( const Childr_:TListChildr ); overload;
+       procedure InsertHead( const Childr_:TListChildr ); overload; virtual;
+       procedure InsertTail( const Childr_:TListChildr ); overload; virtual;
+       procedure Add( const Childr_:TListChildr ); overload; virtual;
        class procedure Swap( const C1_,C2_:TListChildr ); overload;
        procedure Swap( const I1_,I2_:Integer ); overload;
        function GetEnumerator: TListEnumer;
@@ -264,7 +264,7 @@ end;
 
 procedure TListChildr._Remove;
 begin
-     _Parent.OnRemoveChild( Self );
+     _Parent.OnRemoveChildr( Self );
 
      Bind( _Prev, _Next );
 
@@ -511,7 +511,7 @@ begin
 
      Inc( _ChildrsN );
 
-     OnInsertChild( C1_ );
+     OnInsertChildr( C1_ );
 end;
 
 procedure TListParent._InsertHead( const Childr_:TListChildr );
@@ -535,12 +535,12 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TListParent.OnInsertChild( const Childr_:TListChildr );
+procedure TListParent.OnInsertChildr( const Childr_:TListChildr );
 begin
 
 end;
 
-procedure TListParent.OnRemoveChild( const Childr_:TListChildr );
+procedure TListParent.OnRemoveChildr( const Childr_:TListChildr );
 begin
 
 end;
