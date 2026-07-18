@@ -25,7 +25,7 @@ interface //####################################################################
 
 uses
   System.SysUtils, System.Types, System.UITypes, System.Classes, System.Math,
-  System.Math.Vectors, System.Skia,
+  System.Skia,
   FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Skia, FMX.Skia.Canvas,
   LUX, LUX.D2, LUX.D3x3,
   LUX.CG2D,
@@ -143,7 +143,7 @@ constructor TDelaunayPoins.Create;
 begin
      inherited;
 
-     _Radius := 5;
+     _Radius := 3;
 
      Style.FillColor := TAlphaColors.Red;
      Style.LineColor := TAlphaColors.White;
@@ -280,7 +280,7 @@ procedure TDelaunayVolos.BuildScene( const Delaunay_:TDelaunay2D );
 var
    F :TDelaFace2D;
    K :Byte;
-   Ce :TSingle2D;
+   C :TSingle2D;
    L :TCGLine;
 begin
      Clear;
@@ -291,13 +291,13 @@ begin
      begin
           if F.InfCorn = 0 then
           begin
-               Ce := F.Circle.Center;
+               C := F.Circle.Center;
 
                for K := 1 to 3 do
                begin
                     L := TCGLine.Create( Self );
-                    L.Pos1 := Ce;
-                    L.Pos2 := ( Ce + CenterPos( F.Face[ K ] ) ) / 2;
+                    L.Pos1 := C;
+                    L.Pos2 := ( C + CenterPos( F.Face[ K ] ) ) / 2;
                end;
           end;
      end;
@@ -353,7 +353,6 @@ procedure TDelaunayViewer.Paint;
 var
    Canvas_ :ISkCanvas;
    S :Single;
-   V :TSingleM3;
 begin
      if upDelaunay then
      begin
@@ -376,11 +375,7 @@ begin
 
           Canvas_.Scale( S, S );
 
-          V := _Camera.GlobalPose.Inverse;  // なぜか TMatrix( _Camera.GlobalPose.Inverse ) が通らない
-
-          Canvas_.Concat( TMatrix( V ) );  // ワールド座標系 → カメラ座標系
-
-          _Layers.Render( Canvas_ );
+          _Camera.Render( Canvas_ );  // カメラ座標系への変換とシーンの描画
      finally
           Canvas_.Restore;
      end;
@@ -401,8 +396,8 @@ begin
 
      _Camera := TCGCamera.Create( TCGLayer.Create( _Layers ) );  // カメラ専用レイヤに載せる（BuildScene の Clear で消えないように）
 
-     _Camera.SizeX := 4;
-     _Camera.SizeY := 4;
+     _Camera.SizeX := 400;
+     _Camera.SizeY := 400;
 
      _Layers.OnChange.Add( LayersChange );  // レイヤの変更はルートがまとめて出力する
 end;
