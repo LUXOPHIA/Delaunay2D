@@ -3,13 +3,13 @@
 // 2D ドロネー図（逐次添加法・無限遠頂点方式）
 //
 //【モデル】
-// ・LUX.Data.Model.TriFlip の三角形メッシュを継承し、ドロネー固有の機能だけを加える。
-//   プロパティの型付けは TriFlip.Typed 層が行うため、自分の派生クラスを型引数に
-//   与えるだけでよい。
-//     TDelaPoin2D    … TTriPoin<TSingle2D,TDelaFace2D>                     ＋ 無限遠フラグ（Inf）
-//     TDelaPoinSet2D … TTriPoinSet<TSingle2D,TDelaPoin2D>
-//     TDelaFace2D    … TTriFace<TSingle2D,TDelaPoin2D,TDelaFace2D>         ＋ 空円判定・外接円
-//     TDelaFaceSet2D … TTriFaceSet<TSingle2D,TDelaFace2D,TDelaPoinSet2D>
+// ・LUX.Data.Model.TriFlip.D2 の三角形メッシュを継承し、ドロネー固有の機能だけを
+//   加える。プロパティの型付けは TriFlip の型付け層が行うため、自分の派生クラスを
+//   型引数に与えるだけでよい。
+//     TDelaPoin2D    … TTriPoin2D<TDelaFace2D>                     ＋ 無限遠フラグ（Inf）
+//     TDelaPoinSet2D … TTriPoinSet2D<TDelaPoin2D>
+//     TDelaFace2D    … TTriFace2D<TDelaPoin2D,TDelaFace2D>         ＋ 空円判定・外接円
+//     TDelaFaceSet2D … TTriFaceSet2D<TDelaFace2D,TDelaPoinSet2D>
 //     TDelaunay2D    … TDelaFaceSet2D ＋ 点の追加・削除のアルゴリズム
 //   頂点・面の接続（Poin / Face / Corn）と巡回表（VertTableInc / VertTableDec）、
 //   隣接検査（CheckEdges）、点と面の所有は TriFlip 層が担う。
@@ -37,8 +37,8 @@ interface //####################################################################
 
 uses LUX,
      LUX.D2,
-     LUX.Data.Model.TriFlip,
-     LUX.Data.Model.TriFlip.Typed;
+     LUX.Data.Model.TriFlip.core,
+     LUX.Data.Model.TriFlip.D2;
 
 type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$【 T Y P E 】
 
@@ -91,7 +91,7 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
      //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaPoin2D
 
      // 頂点。TriFlip の点に無限遠フラグを加えたもの。
-     TDelaPoin2D = class( TTriPoin<TSingle2D,TDelaFace2D> )
+     TDelaPoin2D = class( TTriPoin2D<TDelaFace2D> )
      private
      protected
        _Inf :Boolean;
@@ -103,7 +103,7 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
      //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaPoinSet2D
 
      // 点集合。
-     TDelaPoinSet2D = class( TTriPoinSet<TSingle2D,TDelaPoin2D> )
+     TDelaPoinSet2D = class( TTriPoinSet2D<TDelaPoin2D> )
      private
      protected
      public
@@ -112,7 +112,7 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
      //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaFace2D
 
      // 三角形。TriFlip の面に空円判定と外接円を加えたもの。
-     TDelaFace2D = class( TTriFace<TSingle2D,TDelaPoin2D,TDelaFace2D> )
+     TDelaFace2D = class( TTriFace2D<TDelaPoin2D,TDelaFace2D> )
      private
      protected
        ///// A C C E S S O R
@@ -130,7 +130,7 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
      //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaFaceSet2D
 
      // 面集合。
-     TDelaFaceSet2D = class( TTriFaceSet<TSingle2D,TDelaFace2D,TDelaPoinSet2D> )
+     TDelaFaceSet2D = class( TTriFaceSet2D<TDelaFace2D,TDelaPoinSet2D> )
      private
      protected
        ///// A C C E S S O R
