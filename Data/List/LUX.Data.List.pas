@@ -57,10 +57,10 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
        function GetChildrs( const I_:Integer ) :TChildr_; reintroduce; virtual;
        procedure SetChildrs( const I_:Integer; const Childr_:TChildr_ ); reintroduce; virtual;
        ///// E V E N T
-       procedure OnInsertChild( const Childr_:TListChildr ); override;
-       procedure OnRemoveChild( const Childr_:TListChildr ); override;
-       procedure OnInsertChild( const Childr_:TChildr_ ); overload; virtual;
-       procedure OnRemoveChild( const Childr_:TChildr_ ); overload; virtual;
+       procedure OnInsertChildr( const Childr_:TListChildr ); override;
+       procedure OnRemoveChildr( const Childr_:TListChildr ); override;
+       procedure OnInsertChildr( const Childr_:TChildr_ ); overload; virtual;
+       procedure OnRemoveChildr( const Childr_:TChildr_ ); overload; virtual;
      public
        ///// P R O P E R T Y
        property Header                      :TChildr_ read GetHeader                  ;
@@ -68,9 +68,9 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
        property Childrs[ const I_:Integer ] :TChildr_ read GetChildrs write SetChildrs; default;
        property Items[ const I_:Integer ]   :TChildr_ read GetChildrs write SetChildrs;
        ///// M E T H O D
-       procedure InsertHead( const Childr_:TChildr_ ); overload;
-       procedure InsertTail( const Childr_:TChildr_ ); overload;
-       procedure Add( const Childr_:TChildr_ ); overload;
+       procedure InsertHead( const Childr_:TChildr_ ); overload; virtual;
+       procedure InsertTail( const Childr_:TChildr_ ); overload; virtual;
+       procedure Add( const Childr_:TChildr_ ); overload; virtual;
        function GetEnumerator: TListEnumer<TChildr_>;
      end;
 
@@ -183,22 +183,22 @@ end;
 
 ////////////////////////////////////////////////////////////////////// E V E N T
 
-procedure TListParent<TChildr_>.OnInsertChild( const Childr_:TListChildr );
+procedure TListParent<TChildr_>.OnInsertChildr( const Childr_:TListChildr );
 begin
-     OnInsertChild( TChildr_( Childr_ ) );
+     OnInsertChildr( TChildr_( Childr_ ) );
 end;
 
-procedure TListParent<TChildr_>.OnRemoveChild( const Childr_:TListChildr );
+procedure TListParent<TChildr_>.OnRemoveChildr( const Childr_:TListChildr );
 begin
-     OnRemoveChild( TChildr_( Childr_ ) );
+     OnRemoveChildr( TChildr_( Childr_ ) );
 end;
 
-procedure TListParent<TChildr_>.OnInsertChild( const Childr_:TChildr_ );
+procedure TListParent<TChildr_>.OnInsertChildr( const Childr_:TChildr_ );
 begin
 
 end;
 
-procedure TListParent<TChildr_>.OnRemoveChild( const Childr_:TChildr_ );
+procedure TListParent<TChildr_>.OnRemoveChildr( const Childr_:TChildr_ );
 begin
 
 end;
