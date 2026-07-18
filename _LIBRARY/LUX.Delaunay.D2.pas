@@ -2,6 +2,19 @@
 
 // 2D ドロネー図（逐次添加法・無限遠頂点方式）
 //
+//【モデル】
+// ・LUX.Data.Model.TriFlip の三角形メッシュを継承し、ドロネー固有の機能だけを加える。
+//   プロパティの型付けは TriFlip.Typed 層が行うため、自分の派生クラスを型引数に
+//   与えるだけでよい。
+//     TDelaPoin2D    … TTriPoin<TSingle2D,TDelaFace2D>                     ＋ 無限遠フラグ（Inf）
+//     TDelaPoinSet2D … TTriPoinSet<TSingle2D,TDelaPoin2D>
+//     TDelaFace2D    … TTriFace<TSingle2D,TDelaPoin2D,TDelaFace2D>         ＋ 空円判定・外接円
+//     TDelaFaceSet2D … TTriFaceSet<TSingle2D,TDelaFace2D,TDelaPoinSet2D>
+//     TDelaunay2D    … TDelaFaceSet2D ＋ 点の追加・削除のアルゴリズム
+//   頂点・面の接続（Poin / Face / Corn）と巡回表（VertTableInc / VertTableDec）、
+//   隣接検査（CheckEdges）、点と面の所有は TriFlip 層が担う。
+//
+//【アルゴリズム】
 // ・スーパートライアングルを使わず、凸包の外側を「無限遠面」で覆う。
 //   モデルはただ一つの無限遠頂点 PoinInf を持ち、凸包の各辺は
 //   ( PoinInf, Pi, Pj ) からなる面で閉じられる。Poin[] に nil は現れない。
@@ -22,26 +35,20 @@
 
 interface //#################################################################### ■
 
-uses System.Classes, System.Generics.Collections,
-     LUX,
-     LUX.D2;
+uses LUX,
+     LUX.D2,
+     LUX.Data.Model.TriFlip,
+     LUX.Data.Model.TriFlip.Typed;
 
 type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$【 T Y P E 】
 
-     TDelaPoin2D = class;
-     TDelaFace2D = class;
-     TDelaunay2D = class;
+     TDelaPoin2D    = class;
+     TDelaPoinSet2D = class;
+     TDelaFace2D    = class;
+     TDelaFaceSet2D = class;
+     TDelaunay2D    = class;
 
      //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$【 R E C O R D 】
-
-     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TVertLR
-
-     TVertLR = record
-     private
-     public
-       L :Byte;
-       R :Byte;
-     end;
 
      //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TFaceJoint
 
@@ -83,89 +90,88 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
      //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaPoin2D
 
-     TDelaPoin2D = class
+     // 頂点。TriFlip の点に無限遠フラグを加えたもの。
+     TDelaPoin2D = class( TTriPoin<TSingle2D,TDelaFace2D> )
      private
      protected
-       _Pos :TSingle2D;
        _Inf :Boolean;
      public
        ///// P R O P E R T Y
-       property Pos :TSingle2D read _Pos write _Pos;
-       property Inf :Boolean   read _Inf            ;  // 無限遠頂点か
+       property Inf :Boolean read _Inf;  // 無限遠頂点か
+     end;
+
+     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaPoinSet2D
+
+     // 点集合。
+     TDelaPoinSet2D = class( TTriPoinSet<TSingle2D,TDelaPoin2D> )
+     private
+     protected
+     public
      end;
 
      //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaFace2D
 
-     TDelaFace2D = class
+     // 三角形。TriFlip の面に空円判定と外接円を加えたもの。
+     TDelaFace2D = class( TTriFace<TSingle2D,TDelaPoin2D,TDelaFace2D> )
      private
      protected
-       _Poin :array [ 1..3 ] of TDelaPoin2D;
-       _Face :array [ 1..3 ] of TDelaFace2D;
-       _Corn :array [ 1..3 ] of Byte;
        ///// A C C E S S O R
-       function GetPoin( const I_:Byte ) :TDelaPoin2D;
-       procedure SetPoin( const I_:Byte; const Poin_:TDelaPoin2D );
-       function GetFace( const I_:Byte ) :TDelaFace2D;
-       procedure SetFace( const I_:Byte; const Face_:TDelaFace2D );
-       function GetCorn( const I_:Byte ) :Byte;
-       procedure SetCorn( const I_,Corn_:Byte );
        function GetInfCorn :Byte;
        function GetCircle :TSingleCircle;
      public
        ///// P R O P E R T Y
-       property Poin[ const I_:Byte ] :TDelaPoin2D   read GetPoin    write SetPoin;
-       property Face[ const I_:Byte ] :TDelaFace2D   read GetFace    write SetFace;
-       property Corn[ const I_:Byte ] :Byte          read GetCorn    write SetCorn;
-       property InfCorn               :Byte          read GetInfCorn              ;  // 無限遠頂点の番号（0 = 有限面）
-       property Circle                :TSingleCircle read GetCircle               ;  // 描画用（無限遠面では半平面表現）
+       property InfCorn :Byte          read GetInfCorn;  // 無限遠頂点の番号（0 = 有限面）
+       property Circle  :TSingleCircle read GetCircle ;  // 描画用（無限遠面では半平面表現）
        ///// M E T H O D
        class function InCircle( const P1_,P2_,P3_:TDelaPoin2D; const Pos_:TSingle2D ) :Single;  // 統一リフト行列式（正 = 円の内側）
        function IsHitCircle( const Pos_:TSingle2D ) :Boolean;
      end;
 
-     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaunay2D
+     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaFaceSet2D
 
-     TDelaunay2D = class
-       type TPoin_ = TDelaPoin2D;
-       type TFace_ = TDelaFace2D;
+     // 面集合。
+     TDelaFaceSet2D = class( TTriFaceSet<TSingle2D,TDelaFace2D,TDelaPoinSet2D> )
      private
-       _PoinInf  :TPoin_;
-       _Poins    :TObjectList<TPoin_>;
-       _Faces    :TObjectList<TFace_>;
-       _OnChange :TDelegates;
-       ///// M E T H O D
-       function HasPoin( const Pos_:TSingle2D ) :Boolean;
-       procedure InitFace;
-       function FaceTree( const Poin_:TPoin_; const Face_:TFace_; const Vert_:Byte ) :TFaceJoint;
-       procedure Connect( const J_,JL_,JR_:TFaceJoint );
-       procedure InsertPoin( const Poin_:TPoin_; const Face_:TFace_ );
      protected
-       ///// M E T H O D
-       function NewPoin( const Pos_:TSingle2D ) :TPoin_;
-       function NewFace( const Poin1_,Poin2_,Poin3_:TPoin_ ) :TFace_;
-       procedure DeleteFace( const Face_:TFace_ );
+       ///// A C C E S S O R
+       function GetPoins :TDelaPoinSet2D;
      public
-       constructor Create;
-       destructor Destroy; override;
        ///// P R O P E R T Y
-       property PoinInf  :TPoin_              read _PoinInf                 ;  // 唯一の無限遠頂点
-       property Poins    :TObjectList<TPoin_> read _Poins                   ;  // 有限頂点のみ
-       property Faces    :TObjectList<TFace_> read _Faces                   ;
-       property OnChange :TDelegates          read _OnChange                 ;  // 構造が変化したときに発火（Add / Del で多播購読）
-       ///// M E T H O D
-       function HitCircleFace( const Pos_:TSingle2D ) :TFace_;
-       function FindPoin( const Pos_:TSingle2D; const Radius_:Single ) :TPoin_;
-       function AddPoin( const Pos_:TSingle2D ) :TPoin_; overload;
-       function AddPoin( const Pos_:TSingle2D; const Face_:TFace_ ) :TPoin_; overload;
-       function DeletePoin( const Poin_:TPoin_ ) :Boolean;
-       procedure Clear;
-       function CheckEdges :Integer;
+       property Poins :TDelaPoinSet2D read GetPoins;  // 有限頂点のみ（PoinSet の別名）
      end;
 
-const //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$【 C O N S T A N T 】
+     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaunay2D
 
-      VertTable :array [ 1..3 ] of TVertLR
-        = ( ( L:2; R:3 ), ( L:3; R:1 ), ( L:1; R:2 ) );
+     TDelaunay2D = class( TDelaFaceSet2D )
+     private
+       _PoinInf  :TDelaPoin2D;
+       _OnChange :TDelegates;
+       ///// A C C E S S O R
+       function GetFaces :TDelaFaceSet2D;
+       ///// M E T H O D
+       procedure InitFace;
+       function FaceTree( const Poin_:TDelaPoin2D; const Face_:TDelaFace2D; const Vert_:Byte ) :TFaceJoint;
+       procedure Connect( const J_,JL_,JR_:TFaceJoint );
+       procedure InsertPoin( const Poin_:TDelaPoin2D; const Face_:TDelaFace2D );
+     protected
+       ///// M E T H O D
+       function NewPoin( const Pos_:TSingle2D ) :TDelaPoin2D;
+       function NewFace( const Poin1_,Poin2_,Poin3_:TDelaPoin2D ) :TDelaFace2D;
+     public
+       constructor Create; overload; override;
+       destructor Destroy; override;
+       ///// P R O P E R T Y
+       property PoinInf  :TDelaPoin2D    read _PoinInf ;  // 唯一の無限遠頂点（点集合には属さない）
+       property Faces    :TDelaFaceSet2D read GetFaces ;  // 面の集合（＝自分自身）
+       property OnChange :TDelegates     read _OnChange;  // 構造が変化したときに発火（Add / Del で多播購読）
+       ///// M E T H O D
+       function HitCircleFace( const Pos_:TSingle2D ) :TDelaFace2D;
+       function FindPoin( const Pos_:TSingle2D; const Radius_:Single ) :TDelaPoin2D;
+       function AddPoin( const Pos_:TSingle2D ) :TDelaPoin2D; overload;
+       function AddPoin( const Pos_:TSingle2D; const Face_:TDelaFace2D ) :TDelaPoin2D; overload;
+       function DeletePoin( const Poin_:TDelaPoin2D ) :Boolean;
+       procedure Clear; reintroduce;  // 点と面を全消去する（PoinInf は残る）
+     end;
 
 //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$【 R O U T I N E 】
 
@@ -176,12 +182,6 @@ function LineNormal( const P0_,P1_:TSingle2D ) :TSingle2D;
 implementation //############################################################### ■
 
 //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$【 R E C O R D 】
-
-//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TVertLR
-
-//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& private
-
-//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& public
 
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TFaceJoint
 
@@ -245,54 +245,26 @@ end;
 
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& public
 
-//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaFace2D
+//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaPoinSet2D
 
-//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& private
+//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& protected
+
+//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& public
+
+//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaFace2D
 
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& protected
 
 //////////////////////////////////////////////////////////////// A C C E S S O R
 
-function TDelaFace2D.GetPoin( const I_:Byte ) :TDelaPoin2D;
-begin
-     Result := _Poin[ I_ ];
-end;
-
-procedure TDelaFace2D.SetPoin( const I_:Byte; const Poin_:TDelaPoin2D );
-begin
-     _Poin[ I_ ] := Poin_;
-end;
-
-function TDelaFace2D.GetFace( const I_:Byte ) :TDelaFace2D;
-begin
-     Result := _Face[ I_ ];
-end;
-
-procedure TDelaFace2D.SetFace( const I_:Byte; const Face_:TDelaFace2D );
-begin
-     _Face[ I_ ] := Face_;
-end;
-
-function TDelaFace2D.GetCorn( const I_:Byte ) :Byte;
-begin
-     Result := _Corn[ I_ ];
-end;
-
-procedure TDelaFace2D.SetCorn( const I_,Corn_:Byte );
-begin
-     _Corn[ I_ ] := Corn_;
-end;
-
-//------------------------------------------------------------------------------
-
 function TDelaFace2D.GetInfCorn :Byte;
 begin
-     if _Poin[ 1 ].Inf then Result := 1
-                       else
-     if _Poin[ 2 ].Inf then Result := 2
-                       else
-     if _Poin[ 3 ].Inf then Result := 3
-                       else Result := 0;
+     if Poin[ 1 ].Inf then Result := 1
+                      else
+     if Poin[ 2 ].Inf then Result := 2
+                      else
+     if Poin[ 3 ].Inf then Result := 3
+                      else Result := 0;
 end;
 
 function TDelaFace2D.GetCircle :TSingleCircle;
@@ -353,38 +325,42 @@ end;
 
 function TDelaFace2D.IsHitCircle( const Pos_:TSingle2D ) :Boolean;
 begin
-     Result := InCircle( _Poin[ 1 ], _Poin[ 2 ], _Poin[ 3 ], Pos_ ) > 0;
+     Result := InCircle( Poin[ 1 ], Poin[ 2 ], Poin[ 3 ], Pos_ ) > 0;
 end;
+
+//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaFaceSet2D
+
+//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& protected
+
+//////////////////////////////////////////////////////////////// A C C E S S O R
+
+function TDelaFaceSet2D.GetPoins :TDelaPoinSet2D;
+begin
+     Result := PoinSet;
+end;
+
+//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& public
 
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaunay2D
 
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& private
 
-//////////////////////////////////////////////////////////////////// M E T H O D
+//////////////////////////////////////////////////////////////// A C C E S S O R
 
-function TDelaunay2D.HasPoin( const Pos_:TSingle2D ) :Boolean;
-var
-   I :Integer;
+function TDelaunay2D.GetFaces :TDelaFaceSet2D;
 begin
-     Result := True;
-
-     for I := 0 to _Poins.Count-1 do
-     begin
-          with _Poins[ I ].Pos do if ( X = Pos_.X ) and ( Y = Pos_.Y ) then Exit;
-     end;
-
-     Result := False;
+     Result := Self;
 end;
 
-//------------------------------------------------------------------------------
+//////////////////////////////////////////////////////////////////// M E T H O D
 
 procedure TDelaunay2D.InitFace;
 var
-   P1, P2 :TPoin_;
-   C1, C2 :TFace_;
+   P1, P2 :TDelaPoin2D;
+   C1, C2 :TDelaFace2D;
 begin
-     P1 := _Poins[ 0 ];
-     P2 := _Poins[ 1 ];
+     P1 := Poins[ 0 ];
+     P2 := Poins[ 1 ];
 
      C1 := NewFace( _PoinInf, P1, P2 );
      C2 := NewFace( _PoinInf, P2, P1 );
@@ -400,14 +376,14 @@ end;
 
 //------------------------------------------------------------------------------
 
-function TDelaunay2D.FaceTree( const Poin_:TPoin_; const Face_:TFace_; const Vert_:Byte ) :TFaceJoint;
+function TDelaunay2D.FaceTree( const Poin_:TDelaPoin2D; const Face_:TDelaFace2D; const Vert_:Byte ) :TFaceJoint;
 var
    JL, JR :TFaceJoint;
-   C :TFace_;
+   C :TDelaFace2D;
 begin
      if Face_.IsHitCircle( Poin_.Pos ) then
      begin
-          with VertTable[ Vert_ ] do
+          with VertTableInc[ Vert_ ] do
           begin
                JL := FaceTree( Poin_, Face_.Face[ R ], Face_.Corn[ R ] );
                JR := FaceTree( Poin_, Face_.Face[ L ], Face_.Corn[ L ] );
@@ -430,7 +406,7 @@ begin
                end
           end;
 
-          DeleteFace( Face_ );
+          Face_.Free;
 
           with Result do
           begin
@@ -440,7 +416,7 @@ begin
      end
      else
      begin
-          with VertTable[ Vert_ ] do C := NewFace( Face_.Poin[ L ], Poin_, Face_.Poin[ R ] );
+          with VertTableInc[ Vert_ ] do C := NewFace( Face_.Poin[ L ], Poin_, Face_.Poin[ R ] );
 
           C.Face[ 2 ] := Face_;
           C.Corn[ 2 ] := Vert_;
@@ -475,7 +451,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TDelaunay2D.InsertPoin( const Poin_:TPoin_; const Face_:TFace_ );
+procedure TDelaunay2D.InsertPoin( const Poin_:TDelaPoin2D; const Face_:TDelaFace2D );
 var
    J1, J2, J3 :TFaceJoint;
 begin
@@ -483,7 +459,7 @@ begin
      J2 := FaceTree( Poin_, Face_.Face[ 2 ], Face_.Corn[ 2 ] );
      J3 := FaceTree( Poin_, Face_.Face[ 3 ], Face_.Corn[ 3 ] );
 
-     DeleteFace( Face_ );
+     Face_.Free;
 
      Connect( J1, J2, J3 );
      Connect( J2, J3, J1 );
@@ -494,29 +470,18 @@ end;
 
 //////////////////////////////////////////////////////////////////// M E T H O D
 
-function TDelaunay2D.NewPoin( const Pos_:TSingle2D ) :TPoin_;
+function TDelaunay2D.NewPoin( const Pos_:TSingle2D ) :TDelaPoin2D;
 begin
-     Result := TPoin_.Create;
-
-     Result.Pos := Pos_;
-
-     _Poins.Add( Result );
+     Result := TDelaPoin2D.Create( Pos_, PoinSet );
 end;
 
-function TDelaunay2D.NewFace( const Poin1_,Poin2_,Poin3_:TPoin_ ) :TFace_;
+function TDelaunay2D.NewFace( const Poin1_,Poin2_,Poin3_:TDelaPoin2D ) :TDelaFace2D;
 begin
-     Result := TFace_.Create;
+     Result := TDelaFace2D.Create( Self );
 
-     Result.Poin[1] := Poin1_;
-     Result.Poin[2] := Poin2_;
-     Result.Poin[3] := Poin3_;
-
-     _Faces.Add( Result );
-end;
-
-procedure TDelaunay2D.DeleteFace( const Face_:TFace_ );
-begin
-     _Faces.Remove( Face_ );  // OwnsObjects = True なので同時に解放される
+     Result.Poin[ 1 ] := Poin1_;
+     Result.Poin[ 2 ] := Poin2_;
+     Result.Poin[ 3 ] := Poin3_;
 end;
 
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& public
@@ -525,34 +490,27 @@ constructor TDelaunay2D.Create;
 begin
      inherited;
 
-     _PoinInf := TPoin_.Create;
-     _PoinInf._Inf := True;
+     _PoinInf := TDelaPoin2D.Create( TSingle2D.Create( 0, 0 ) );
 
-     _Poins := TObjectList<TPoin_>.Create;
-     _Faces := TObjectList<TFace_>.Create;
+     _PoinInf._Inf := True;
 end;
 
 destructor TDelaunay2D.Destroy;
 begin
-     _Faces.Free;
-     _Poins.Free;
+     inherited;        // 点と面は集合ごと解放される
 
      _PoinInf.Free;
-
-     inherited;
 end;
 
 //////////////////////////////////////////////////////////////////// M E T H O D
 
-function TDelaunay2D.HitCircleFace( const Pos_:TSingle2D ) :TFace_;
+function TDelaunay2D.HitCircleFace( const Pos_:TSingle2D ) :TDelaFace2D;
 var
-   I :Integer;
+   F :TDelaFace2D;
 begin
-     for I := 0 to _Faces.Count-1 do
+     for F in Faces do
      begin
-          Result := _Faces[ I ];
-
-          if Result.IsHitCircle( Pos_ ) then Exit;
+          if F.IsHitCircle( Pos_ ) then Exit( F );
      end;
 
      Result := nil;
@@ -560,13 +518,11 @@ end;
 
 //------------------------------------------------------------------------------
 
-function TDelaunay2D.AddPoin( const Pos_:TSingle2D ) :TPoin_;
+function TDelaunay2D.AddPoin( const Pos_:TSingle2D ) :TDelaPoin2D;
 var
-   F :TFace_;
+   F :TDelaFace2D;
 begin
-     if HasPoin( Pos_ ) then Exit( nil );  // 重複点は無視する
-
-     case _Poins.Count of
+     case Poins.ChildrsN of
        0: begin
                Result := NewPoin( Pos_ );  _OnChange.Run( Self );
           end;
@@ -581,46 +537,46 @@ begin
      end;
 end;
 
-function TDelaunay2D.AddPoin( const Pos_:TSingle2D; const Face_:TFace_ ) :TPoin_;
+function TDelaunay2D.AddPoin( const Pos_:TSingle2D; const Face_:TDelaFace2D ) :TDelaPoin2D;
 begin
      Result := NewPoin( Pos_ );  InsertPoin( Result, Face_ );  _OnChange.Run( Self );
 end;
 
 //------------------------------------------------------------------------------
 
-function TDelaunay2D.FindPoin( const Pos_:TSingle2D; const Radius_:Single ) :TPoin_;
+function TDelaunay2D.FindPoin( const Pos_:TSingle2D; const Radius_:Single ) :TDelaPoin2D;
 var
-   I :Integer;
+   P :TDelaPoin2D;
    D, Dm :Single;
 begin
      Result := nil;
 
      Dm := Pow2( Radius_ );
 
-     for I := 0 to _Poins.Count-1 do
+     for P in Poins do
      begin
-          D := Distance2( Pos_, _Poins[ I ].Pos );
+          D := Distance2( Pos_, P.Pos );
 
           if D < Dm then
           begin
-               Dm := D;  Result := _Poins[ I ];
+               Dm := D;  Result := P;
           end;
      end;
 end;
 
 //------------------------------------------------------------------------------
 
-function TDelaunay2D.DeletePoin( const Poin_:TPoin_ ) :Boolean;
+function TDelaunay2D.DeletePoin( const Poin_:TDelaPoin2D ) :Boolean;
 type
     TLink = record
-      Face :TFace_;
+      Face :TDelaFace2D;
       Corn :Byte;
     end;
 var
-   Ring  :TArray<TPoin_>;
+   Ring  :TArray<TDelaPoin2D>;
    Links :TArray<TLink>;
 //･･･････････････････････････････････････････
-     procedure Link( const F_:TFace_; const C_:Byte; const L_:TLink );
+     procedure Link( const F_:TDelaFace2D; const C_:Byte; const L_:TLink );
      begin
           F_.Face[ C_ ] := L_.Face;  F_.Corn[ C_ ] := L_.Corn;
 
@@ -630,7 +586,7 @@ var
      function EarOK( const I_:Integer; const Strict_,GhostTip_:Boolean ) :Boolean;
      var
         K, J :Integer;
-        A, B, C, Q :TPoin_;
+        A, B, C, Q :TDelaPoin2D;
         D :Single;
      begin
           Result := False;
@@ -668,7 +624,7 @@ var
      procedure Clip( const I_:Integer );
      var
         K, J :Integer;
-        F :TFace_;
+        F :TDelaFace2D;
      begin
           K := Length( Ring );
 
@@ -698,7 +654,7 @@ var
      var
         Pass, I :Integer;
         Done :Boolean;
-        F :TFace_;
+        F :TDelaFace2D;
      begin
           while Length( Ring ) > 3 do
           begin
@@ -729,31 +685,32 @@ var
      end;
 //･･･････････････････････････････････････････
 var
-   I, K, J :Integer;
+   K, J :Integer;
    C, C1, R :Byte;
-   F0, F, F1 :TFace_;
-   Star :TArray<TFace_>;
-   Ws   :TArray<TPoin_>;
+   F0, F, F1 :TDelaFace2D;
+   Star :TArray<TDelaFace2D>;
+   Ws   :TArray<TDelaPoin2D>;
    Ls   :TArray<TLink>;
    L :TLink;
 begin
      Result := False;
 
-     if ( Poin_ = nil ) or Poin_.Inf or ( _Poins.IndexOf( Poin_ ) < 0 ) then Exit;
+     if ( Poin_ = nil ) or Poin_.Inf or ( Poin_.Parent <> PoinSet ) then Exit;
 
-     case _Poins.Count of
+     case Poins.ChildrsN of
        1: begin
-               _Poins.Remove( Poin_ );
+               Poin_.Free;
           end;
        2: begin
-               _Faces.Clear;  _Poins.Remove( Poin_ );
+               inherited Clear;  // 面を全解放する
+
+               Poin_.Free;
           end;
      else
           // 頂点を含む面を1つ探す
           F0 := nil;  C := 0;
-          for I := 0 to _Faces.Count-1 do
+          for F in Faces do
           begin
-               F := _Faces[ I ];
                for C1 := 1 to 3 do
                begin
                     if F.Poin[ C1 ] = Poin_ then begin F0 := F;  C := C1;  Break; end;
@@ -766,7 +723,7 @@ begin
           Star := nil;  Ws := nil;  Ls := nil;
           F := F0;
           repeat
-                R := VertTable[ C ].R;
+                R := VertTableInc[ C ].R;
 
                 Star := Star + [ F ];
                 Ws   := Ws   + [ F.Poin[ R ] ];
@@ -777,10 +734,10 @@ begin
 
                 C1 := F.Corn[ R ];
                 F  := F.Face[ R ];
-                C  := VertTable[ C1 ].R;
+                C  := VertTableInc[ C1 ].R;
           until F = F0;
 
-          for F1 in Star do DeleteFace( F1 );
+          for F1 in Star do F1.Free;
 
           // 収集順は時計回りなので反転して正の向きのリングにする
           K := Length( Ws );
@@ -794,7 +751,7 @@ begin
 
           Fill;
 
-          _Poins.Remove( Poin_ );
+          Poin_.Free;
      end;
 
      _OnChange.Run( Self );
@@ -806,35 +763,11 @@ end;
 
 procedure TDelaunay2D.Clear;
 begin
-     _Faces.Clear;
-     _Poins.Clear;
+     inherited Clear;  // 面を全解放する
+
+     Poins.Clear;      // 点を全解放する（PoinInf は集合外なので残る）
 
      _OnChange.Run( Self );
-end;
-
-//------------------------------------------------------------------------------
-
-function TDelaunay2D.CheckEdges :Integer;
-var
-   I :Integer;
-   C0, C1 :Byte;
-   F0, F1 :TFace_;
-begin
-     Result := 0;
-
-     for I := 0 to _Faces.Count-1 do
-     begin
-          F0 := _Faces[ I ];
-
-          for C0 := 1 to 3 do
-          begin
-               F1 := F0.Face[ C0 ];
-               C1 := F0.Corn[ C0 ];
-
-               if ( F1 = nil ) or ( F1.Face[ C1 ] <> F0 )
-                              or ( F1.Corn[ C1 ] <> C0 ) then Inc( Result );
-          end;
-     end;
 end;
 
 //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$【 R O U T I N E 】
