@@ -15,16 +15,19 @@
 //   Create で設定される。スタイルの変更はシーンに通知され、自動的に再描画される。
 // ・シーンの再構築は「全廃棄・全構築」とし、Paint の直前まで遅延して1フレームに
 //   1回だけ行う。再構築は BeginUpdate / EndUpdate で束ね、ノード単位の通知を止める。
-// ・シーンはモデル座標系のまま構築し、描画時にキャンバスを画面中央へ平行移動する。
+// ・強制的に TCGCamera を1つ生成して保持し（Camera プロパティ。カメラ専用レイヤに
+//   所属させる）、カメラから見た風景を描く。視野（SizeX / SizeY = 既定 512×512）が
+//   UI にぴったり収まる等方スケールで描き、アスペクト比の差は視野の広がりで吸収する。
 // ・マウス操作などは載せない。アプリケーション側で OnMouseDown 等を処理し、
 //   座標変換 ScrToPos / PosToScr を使って行う。
 
 interface //#################################################################### ■
 
 uses
-  System.SysUtils, System.Types, System.UITypes, System.Classes, System.Skia,
+  System.SysUtils, System.Types, System.UITypes, System.Classes, System.Math,
+  System.Math.Vectors, System.Skia,
   FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Skia, FMX.Skia.Canvas,
-  LUX, LUX.D2,
+  LUX, LUX.D2, LUX.D3x3,
   LUX.CG2D,
   LUX.CG2D.Shapers,
   LUX.Delaunay.D2;
@@ -90,6 +93,7 @@ type
   protected
     _Delaunay :TDelaunay2D;    upDelaunay :Boolean;  // シーンの再構築の予約（Paint の直前に1回だけ実行）
     _Layers   :TCGLayers;
+    _Camera   :TCGCamera;
     _Poins    :TDelaunayPoins;
     _Trias    :TDelaunayTrias;
     _Circs    :TDelaunayCircs;
@@ -107,6 +111,7 @@ type
     ///// P R O P E R T Y
     property Delaunay :TDelaunay2D read _Delaunay write SetDelaunay;
     property Layers   :TCGLayers   read _Layers                    ;  // 構築されたシーン
+    property Camera   :TCGCamera   read _Camera                    ;  // 視点（強制生成。位置や視野を操作できる）
     ///// P R O P E R T Y （レイヤ）
     property Poins :TDelaunayPoins read _Poins;  // 頂点　　（Viewer1.Poins.Radius など）
     property Trias :TDelaunayTrias read _Trias;  // 三角形
@@ -347,6 +352,8 @@ end;
 procedure TDelaunayViewer.Paint;
 var
    Canvas_ :ISkCanvas;
+   S :Single;
+   V :TSingleM3;
 begin
      if upDelaunay then
      begin
@@ -363,7 +370,15 @@ begin
      try
           Canvas_.ClipRect( TRectF.Create( 0, 0, Width, Height ) );
 
-          Canvas_.Translate( Width / 2, Height / 2 );  // モデル座標系 → 画面中央
+          Canvas_.Translate( Width / 2, Height / 2 );  // 視野の中心 → 画面中央
+
+          S := Min( Width / _Camera.SizeX, Height / _Camera.SizeY );  // 視野がぴったり収まる等方スケール
+
+          Canvas_.Scale( S, S );
+
+          V := _Camera.GlobalPose.Inverse;  // なぜか TMatrix( _Camera.GlobalPose.Inverse ) が通らない
+
+          Canvas_.Concat( TMatrix( V ) );  // ワールド座標系 → カメラ座標系
 
           _Layers.Render( Canvas_ );
      finally
@@ -384,6 +399,11 @@ begin
      _Volos := TDelaunayVolos.Create( _Layers );
      _Poins := TDelaunayPoins.Create( _Layers );
 
+     _Camera := TCGCamera.Create( TCGLayer.Create( _Layers ) );  // カメラ専用レイヤに載せる（BuildScene の Clear で消えないように）
+
+     _Camera.SizeX := 4;
+     _Camera.SizeY := 4;
+
      _Layers.OnChange.Add( LayersChange );  // レイヤの変更はルートがまとめて出力する
 end;
 
@@ -399,15 +419,23 @@ end;
 //////////////////////////////////////////////////////////////////// M E T H O D
 
 function TDelaunayViewer.ScrToPos( const S_:TPointF ) :TSingle2D;
+var
+   S :Single;
 begin
-     Result := S_ - TPointF.Create( Width  / 2,
-                                    Height / 2 );
+     S := Min( Width / _Camera.SizeX, Height / _Camera.SizeY );
+
+     Result := _Camera.GlobalPose.MultPos( ( S_ - TPointF.Create( Width  / 2,
+                                                                  Height / 2 ) ) / S );
 end;
 
 function TDelaunayViewer.PosToScr( const P_:TSingle2D ) :TPointF;
+var
+   S :Single;
 begin
-     Result := TPointF( P_ ) + TPointF.Create( Width  / 2,
-                                               Height / 2 );
+     S := Min( Width / _Camera.SizeX, Height / _Camera.SizeY );
+
+     Result := TPointF( _Camera.GlobalPose.Inverse.MultPos( P_ ) * S ) + TPointF.Create( Width  / 2,
+                                                                                         Height / 2 );
 end;
 
 end. //######################################################################### ■
