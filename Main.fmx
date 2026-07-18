@@ -13,43 +13,44 @@ object Form1: TForm1
   DesignerMasterStyle = 0
   inline Viewer1: TDelaunayViewer
     Align = Client
-    Size.Width = 522.000000000000000000
-    Size.Height = 512.000000000000000000
+    Size.Width = 522.00000000000000000
+    Size.Height = 512.00000000000000000
     Size.PlatformDefault = False
     OnMouseDown = Viewer1MouseDown
   end
   object Panel1: TPanel
     Align = Right
-    Position.X = 522.000000000000000000
-    Size.Width = 120.000000000000000000
-    Size.Height = 512.000000000000000000
+    Position.X = 522.00000000000000000
+    Size.Width = 120.00000000000000000
+    Size.Height = 512.00000000000000000
     Size.PlatformDefault = False
     StyleLookup = 'pushpanel'
     TabOrder = 1
-    object Button1: TButton
-      Align = Top
-      Margins.Left = 8.000000000000000000
-      Margins.Top = 8.000000000000000000
-      Margins.Right = 8.000000000000000000
-      Size.Width = 104.000000000000000000
-      Size.Height = 32.000000000000000000
-      Size.PlatformDefault = False
-      TabOrder = 0
-      Text = 'Random x100'
-      OnClick = Button1Click
-    end
-    object Button2: TButton
-      Align = Top
-      Margins.Left = 8.000000000000000000
-      Margins.Top = 8.000000000000000000
-      Margins.Right = 8.000000000000000000
-      Position.Y = 40.000000000000000000
-      Size.Width = 104.000000000000000000
-      Size.Height = 32.000000000000000000
+    object ButtonR: TButton
+      Margins.Left = 8.00000000000000000
+      Margins.Top = 8.00000000000000000
+      Margins.Right = 8.00000000000000000
+      Position.X = 10.00000000000000000
+      Position.Y = 70.00000000000000000
+      Size.Width = 100.00000000000000000
+      Size.Height = 50.00000000000000000
       Size.PlatformDefault = False
       TabOrder = 1
+      Text = 'Random'
+      OnClick = ButtonRClick
+    end
+    object ButtonC: TButton
+      Margins.Left = 8.00000000000000000
+      Margins.Top = 8.00000000000000000
+      Margins.Right = 8.00000000000000000
+      Position.X = 10.00000000000000000
+      Position.Y = 10.00000000000000000
+      Size.Width = 100.00000000000000000
+      Size.Height = 50.00000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 0
       Text = 'Clear'
-      OnClick = Button2Click
+      OnClick = ButtonCClick
     end
   end
 end
