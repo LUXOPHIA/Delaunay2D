@@ -9,6 +9,8 @@
 // ・TCGObject は親も子も自型の節（TTreeKnot<TCGObject,TCGObject>）であり、互いに
 //   自由にジョイントできる。TCGLayer は TCGObject の派生。ルートの TCGLayers は
 //   TTreeRoot<TCGLayer> であり、TCGObject ではない（スタイルも行列も持たない）。
+// ・TCGCamera は視野の広さ（SizeX / SizeY）を持つ視点ノード。通常のノードと同じく
+//   シーンの任意の場所に置け、ビューアはこのカメラ越しにシーンを描く。
 // ・子型の検査（ETreeError）: TCGLayers はレイヤだけを受け入れる。TCGObject は
 //   レイヤを受け入れない（レイヤは TCGLayers 直下専用）。TCGLayers はどのノード
 //   の子にもなれない。
@@ -137,6 +139,26 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
        procedure SetLocalPose( const LocalPose_:TSingleM3 ); override;
      public
        constructor Create; overload; override;
+     end;
+
+     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TCGCamera
+
+     // カメラ。シーンに置ける視点ノードであり、自分では何も描かない。
+     // SizeX / SizeY は、カメラの絶対座標（GlobalPose の位置）を中心とする視野の
+     // 広さ（ワールド単位）。姿勢は先祖の Pose の積（GlobalPose）で決まる。
+     TCGCamera = class( TCGObject )
+     private
+     protected
+       _SizeX :Single;
+       _SizeY :Single;
+       ///// A C C E S S O R
+       procedure SetSizeX( const SizeX_:Single );
+       procedure SetSizeY( const SizeY_:Single );
+     public
+       constructor Create; overload; override;
+       ///// P R O P E R T Y
+       property SizeX :Single read _SizeX write SetSizeX;  // 視野の幅
+       property SizeY :Single read _SizeY write SetSizeY;  // 視野の高さ
      end;
 
      //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TCGLayer
@@ -435,6 +457,36 @@ begin
      inherited;
 
      _LocalPose := 1;
+end;
+
+//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TCGCamera
+
+//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& protected
+
+//////////////////////////////////////////////////////////////// A C C E S S O R
+
+procedure TCGCamera.SetSizeX( const SizeX_:Single );
+begin
+     _SizeX := SizeX_;
+
+     Changed;
+end;
+
+procedure TCGCamera.SetSizeY( const SizeY_:Single );
+begin
+     _SizeY := SizeY_;
+
+     Changed;
+end;
+
+//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& public
+
+constructor TCGCamera.Create;
+begin
+     inherited;
+
+     _SizeX := 2;  // 視野 -1〜+1
+     _SizeY := 2;
 end;
 
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TCGLayer
