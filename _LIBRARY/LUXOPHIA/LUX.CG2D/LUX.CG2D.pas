@@ -10,7 +10,9 @@
 //   自由にジョイントできる。TCGLayer は TCGObject の派生。ルートの TCGLayers は
 //   TTreeRoot<TCGLayer> であり、TCGObject ではない（スタイルも行列も持たない）。
 // ・TCGCamera は視野の広さ（SizeX / SizeY）を持つ視点ノード。通常のノードと同じく
-//   シーンの任意の場所に置け、ビューアはこのカメラ越しにシーンを描く。
+//   シーンの任意の場所に置ける。属すシーン（ルートの TCGLayers）の OnChange を
+//   購読して OnScene として転送し、Render でカメラから見たシーンを描く。
+//   ビューアはカメラだけを受け取ればよい。
 // ・子型の検査（ETreeError）: TCGLayers はレイヤだけを受け入れる。TCGObject は
 //   レイヤを受け入れない（レイヤは TCGLayers 直下専用）。TCGLayers はどのノード
 //   の子にもなれない。
@@ -146,19 +148,34 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
      // カメラ。シーンに置ける視点ノードであり、自分では何も描かない。
      // SizeX / SizeY は、カメラの絶対座標（GlobalPose の位置）を中心とする視野の
      // 広さ（ワールド単位）。姿勢は先祖の Pose の積（GlobalPose）で決まる。
+     // 属すシーンの OnChange を購読して OnScene として転送する。所属の変更には
+     // Create( Parent_ ) と Parent への代入で追従する（Add での移籍には追従しない）。
      TCGCamera = class( TCGObject )
      private
+       _Scene :TCGLayers;  // 購読中のシーン
+       ///// E V E N T
+       _OnScene :TDelegates;
+       ///// M E T H O D
+       procedure Subscribe;  // Root のシーンを購読し直す
+       procedure SceneChange( Sender_:TObject );
      protected
        _SizeX :Single;
        _SizeY :Single;
        ///// A C C E S S O R
        procedure SetSizeX( const SizeX_:Single );
        procedure SetSizeY( const SizeY_:Single );
+       procedure SetParent( const Parent_:TCGObject ); override;
      public
        constructor Create; overload; override;
+       destructor Destroy; override;
+       procedure AfterConstruction; override;
        ///// P R O P E R T Y
        property SizeX :Single read _SizeX write SetSizeX;  // 視野の幅
        property SizeY :Single read _SizeY write SetSizeY;  // 視野の高さ
+       ///// E V E N T
+       property OnScene :TDelegates read _OnScene;  // シーンの変化の通知（TCGLayers.OnChange の転送）
+       ///// M E T H O D
+       procedure Render( const Canvas_:ISkCanvas );  // カメラ座標系への変換を適用してシーンを描く
      end;
 
      //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TCGLayer
@@ -461,6 +478,30 @@ end;
 
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TCGCamera
 
+//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& private
+
+//////////////////////////////////////////////////////////////////// M E T H O D
+
+procedure TCGCamera.Subscribe;
+var
+   R :TTreeNode;
+begin
+     if Assigned( _Scene ) then _Scene.OnChange.Del( SceneChange );
+
+     _Scene := nil;
+
+     R := Root;
+
+     if R is TCGLayers then _Scene := TCGLayers( R );
+
+     if Assigned( _Scene ) then _Scene.OnChange.Add( SceneChange );
+end;
+
+procedure TCGCamera.SceneChange( Sender_:TObject );
+begin
+     _OnScene.Run( Self );
+end;
+
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& protected
 
 //////////////////////////////////////////////////////////////// A C C E S S O R
@@ -479,6 +520,15 @@ begin
      Changed;
 end;
 
+//------------------------------------------------------------------------------
+
+procedure TCGCamera.SetParent( const Parent_:TCGObject );
+begin
+     inherited;
+
+     Subscribe;  // 所属が変わったのでシーンを購読し直す
+end;
+
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& public
 
 constructor TCGCamera.Create;
@@ -487,6 +537,35 @@ begin
 
      _SizeX := 2;  // 視野 -1〜+1
      _SizeY := 2;
+end;
+
+destructor TCGCamera.Destroy;
+begin
+     if Assigned( _Scene ) then _Scene.OnChange.Del( SceneChange );  // 購読解除
+
+     inherited;
+end;
+
+procedure TCGCamera.AfterConstruction;
+begin
+     inherited;  // ここで親へ挿入される
+
+     Subscribe;
+end;
+
+//////////////////////////////////////////////////////////////////// M E T H O D
+
+procedure TCGCamera.Render( const Canvas_:ISkCanvas );
+var
+   M :TSingleM3;
+begin
+     if not Assigned( _Scene ) then Exit;  // シーンに属していなければ何も描かない
+
+     M := GlobalPose.Inverse;
+
+     Canvas_.Concat( TMatrix( M ) );  // ワールド座標系 → カメラ座標系
+
+     _Scene.Render( Canvas_ );
 end;
 
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TCGLayer
