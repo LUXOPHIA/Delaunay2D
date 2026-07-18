@@ -17,7 +17,7 @@ uses
   LUX.CG2D;
 
 type
-  TViewer = class(TFrame)
+  TCGViewer = class(TFrame)
   private
   protected
     _Layers :TCGLayers;
@@ -40,7 +40,7 @@ implementation //###############################################################
 
 //////////////////////////////////////////////////////////////// A C C E S S O R
 
-procedure TViewer.SetLayers( const Layers_:TCGLayers );
+procedure TCGViewer.SetLayers( const Layers_:TCGLayers );
 begin
      if Assigned( _Layers ) then _Layers.OnChange.Del( LayersChange );
 
@@ -53,14 +53,14 @@ end;
 
 //////////////////////////////////////////////////////////////////// M E T H O D
 
-procedure TViewer.LayersChange( Sender_:TObject );
+procedure TCGViewer.LayersChange( Sender_:TObject );
 begin
      Repaint;
 end;
 
 //------------------------------------------------------------------------------
 
-procedure TViewer.Paint;
+procedure TCGViewer.Paint;
 var
    Canvas_ :ISkCanvas;
 begin
@@ -81,7 +81,7 @@ end;
 
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& public
 
-destructor TViewer.Destroy;
+destructor TCGViewer.Destroy;
 begin
      if Assigned( _Layers ) then _Layers.OnChange.Del( LayersChange );  // 購読解除
 
