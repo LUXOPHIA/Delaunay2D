@@ -16,7 +16,7 @@ uses
   LUX.Delaunay.D2.Viewer in '_LIBRARY\LUX.Delaunay.D2.Viewer.pas' {DelaunayViewer: TFrame},
   LUX.CG2D in '_LIBRARY\LUXOPHIA\LUX.CG2D\LUX.CG2D.pas',
   LUX.CG2D.Shapers in '_LIBRARY\LUXOPHIA\LUX.CG2D\LUX.CG2D.Shapers.pas',
-  LUX.CG2D.ViewerFrame in '_LIBRARY\LUXOPHIA\LUX.CG2D\LUX.CG2D.ViewerFrame.pas' {Viewer: TFrame},
+  LUX.CG2D.ViewerFrame in '_LIBRARY\LUXOPHIA\LUX.CG2D\LUX.CG2D.ViewerFrame.pas' {CGViewer: TFrame},
   LUX.Data.List in '_LIBRARY\LUXOPHIA\LUX\Data\List\LUX.Data.List.pas',
   LUX.Data.List.core in '_LIBRARY\LUXOPHIA\LUX\Data\List\LUX.Data.List.core.pas',
   LUX.Data.Tree in '_LIBRARY\LUXOPHIA\LUX\Data\Tree\LUX.Data.Tree.pas',
