@@ -27,7 +27,7 @@ uses
   System.SysUtils, System.Types, System.UITypes, System.Classes, System.Math,
   System.Skia,
   FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Skia, FMX.Skia.Canvas,
-  LUX, LUX.D2, LUX.D3x3,
+  LUX, LUX.D2, LUX.D3, LUX.D3x3,
   LUX.CG2D,
   LUX.CG2D.Shapers,
   LUX.Delaunay.D2;
@@ -222,6 +222,8 @@ end;
 procedure TDelaunayCircs.BuildScene( const Delaunay_:TDelaunay2D );
 var
    F :TDelaFace2D;
+   V :TSingle3D;
+   P :TSingle2D;
    C :TCGCirc;
 begin
      Clear;
@@ -230,14 +232,15 @@ begin
 
      for F in Delaunay_.Faces do
      begin
-          if F.InfCorn = 0 then
+          V := F.Circum;
+
+          if V.Z > 0 then  // 有限面のみ（無限遠面は W = 0）
           begin
-               with F.Circle do
-               begin
-                    C := TCGCirc.Create( Self );
-                    C.Pos    := Center;
-                    C.Radius := Radius;
-               end;
+               P := TSingle2D.Create( V.X, V.Y ) / V.Z;
+
+               C := TCGCirc.Create( Self );
+               C.Pos    := P;
+               C.Radius := Distance( P, F.Poin[ 1 ].Pos );
           end;
      end;
 end;
@@ -259,22 +262,13 @@ end;
 procedure TDelaunayVolos.BuildScene( const Delaunay_:TDelaunay2D );
 //------------------------------------------------
      function CenterPos( const Face_:TDelaFace2D ) :TSingle2D;
-     //------------------------------------------------
-          function EdgeCenter( const P1_,P2_:TDelaPoin2D ) :TSingle2D;
-          begin
-               Result := ( P1_.Pos + P2_.Pos ) / 2 - 10000 * Face_.Circle.Center;
-          end;
-     //------------------------------------------------
+     var
+        V :TSingle3D;
      begin
-          with Face_ do
-          begin
-               case InfCorn of
-                 0: Result := Circle.Center;
-                 1: Result := EdgeCenter( Poin[ 2 ], Poin[ 3 ] );
-                 2: Result := EdgeCenter( Poin[ 3 ], Poin[ 1 ] );
-                 3: Result := EdgeCenter( Poin[ 1 ], Poin[ 2 ] );
-               end;
-          end;
+          V := Face_.Circum;
+
+          if V.Z > 0 then Result := TSingle2D.Create( V.X, V.Y ) / V.Z              // 有限面 → 外心（ボロノイ頂点）
+                     else Result := TSingle2D.Create( V.X, V.Y ).Unitor * 10000;  // 無限遠面 → 外向きの遠方
      end;
 //------------------------------------------------
 var
@@ -291,7 +285,7 @@ begin
      begin
           if F.InfCorn = 0 then
           begin
-               C := F.Circle.Center;
+               C := CenterPos( F );
 
                for K := 1 to 3 do
                begin
