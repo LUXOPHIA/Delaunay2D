@@ -8,7 +8,7 @@
 //   型引数に与えるだけでよい。
 //     TDelaPoin2D    … TTriPoin2D<TDelaFace2D>                     ＋ 無限遠フラグ（Inf）
 //     TDelaPoinSet2D … TTriPoinSet2D<TDelaPoin2D>
-//     TDelaFace2D    … TTriFace2D<TDelaPoin2D,TDelaFace2D>         ＋ 空円判定・外接円
+//     TDelaFace2D    … TTriFace2D<TDelaPoin2D,TDelaFace2D>         ＋ 空円判定・同次外心
 //     TDelaFaceSet2D … TTriFaceSet2D<TDelaFace2D,TDelaPoinSet2D>
 //     TDelaunay2D    … TDelaFaceSet2D ＋ 点の追加・削除のアルゴリズム
 //   頂点・面の接続（Poin / Face / Corn）と巡回表（VertTableInc / VertTableDec）、
@@ -28,21 +28,34 @@
 //   FaceTree で再帰的に削除し、境界辺ごとに新しい面を張り直す。
 //   キャビティの内部に頂点が存在しないため、その双対グラフは木になり、
 //   一度の再帰で削除・生成・縫合が完了する。
-// ・点の削除は耳切り法。頂点の周囲の面（星型領域）を隣接をたどって一周収集し、
-//   まとめて削除して穴（リング）を作り、「外接円が他のリング頂点を含まない耳」
-//   から埋め戻す（Devillers の削除法）。凸包上の頂点ではリングに無限遠頂点が
-//   含まれるが、統一述語がそのまま扱うので場合分けは要らない。
+// ・点の削除はフリップ法。耳の底辺（頂点と耳先を結ぶ辺）を FlipEdge で外して次数を
+//   下げていき、次数3になったら3面を1面に畳み込んで頂点を取り除く。穴を開けない
+//   ため途中状態が常に正しい三角形分割であり、リングの配列管理も要らない。
+//   耳が有効である条件は「自分が耳の外接円の内側にあり、円が他のリング頂点を
+//   含まない」。これは最終形に現れる面そのものなので、選択の優先順位は要らず、
+//   最初に見つけた有効な耳を切ればよい。
+// ・無限遠頂点は TDelaPoin2DInf として派生し、リフト（Lift = 0,0,1）と内外判定
+//   （InCircled = 向きの行列式）を多態で差し替える。有限点と無限遠点、有限半径の
+//   円と直線（無限半径の円）は同じ式で扱われ、述語にフラグの分岐は存在しない。
+//   リング走査でも、自分自身や無限遠点との判定は行列式が 0 以下となって自然に
+//   除外されるため、スキップの条件分岐も無い。
+// ・面の外心は同次座標 Circum = ( X, Y, W ) で取り出す。リフト空間で3頂点を通る
+//   平面の係数（小行列式）そのものであり、有限面は ( X/W, Y/W ) が外心、無限遠面は
+//   自然に W = 0 へ退化して ( X, Y ) がボロノイ辺の外向きの方向を表す。
+//   計算に分岐も除算もなく、中心＋半径という表現の押し付けが要らない。
 
 interface //#################################################################### ■
 
 uses LUX,
      LUX.D2,
+     LUX.D3,
      LUX.Data.Model.TriFlip.core,
      LUX.Data.Model.TriFlip.D2;
 
 type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$【 T Y P E 】
 
      TDelaPoin2D    = class;
+     TDelaPoin2DInf = class;
      TDelaPoinSet2D = class;
      TDelaFace2D    = class;
      TDelaFaceSet2D = class;
@@ -61,43 +74,40 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
        VertR :Byte;
      end;
 
-     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TSingleCircl2
-
-     TSingleCircl2 = record
-     private
-     public
-       Center :TSingle2D;
-       Radiu2 :Single;
-       /////
-       constructor Create( const P1_,P2_,P3_:TSingle2D ); overload;
-     end;
-
-     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TSingleCircle
-
-     TSingleCircle = record
-     private
-     public
-       Center :TSingle2D;
-       Radius :Single;
-       /////
-       constructor Create( const P1_,P2_,P3_:TSingle2D ); overload;
-       ///// 型変換
-       class operator Implicit( const Circl2_:TSingleCircl2 ) :TSingleCircle;
-       class operator Implicit( const Circle_:TSingleCircle ) :TSingleCircl2;
-     end;
-
      //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$【 C L A S S 】
 
      //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaPoin2D
 
-     // 頂点。TriFlip の点に無限遠フラグを加えたもの。
+     // 頂点。TriFlip の点にリフト（同次化）と内外判定を加えたもの。
      TDelaPoin2D = class( TTriPoin2D<TDelaFace2D> )
      private
      protected
-       _Inf :Boolean;
+       ///// A C C E S S O R
+       function GetInf :Boolean; virtual;
+       ///// M E T H O D
+       function LiftW :Single; virtual;  // 同次成分（有限点 = 1）
      public
        ///// P R O P E R T Y
-       property Inf :Boolean read _Inf;  // 無限遠頂点か
+       property Inf :Boolean read GetInf;  // 無限遠頂点か
+       ///// M E T H O D
+       function Lift( const Pos_:TSingle2D ) :TSingle3D; virtual;  // Pos_ を原点とするリフト座標 ( X, Y, X²+Y² )
+       function InCircled( const P1_,P2_,P3_:TDelaPoin2D ) :Single; virtual;  // 円 ( P1, P2, P3 ) に対する自分の内外（正 = 内側）
+     end;
+
+     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaPoin2DInf
+
+     // 無限遠頂点。リフトと内外判定を多態で差し替える（述語にフラグの分岐は存在しない）。
+     TDelaPoin2DInf = class( TDelaPoin2D )
+     private
+     protected
+       ///// A C C E S S O R
+       function GetInf :Boolean; override;
+       ///// M E T H O D
+       function LiftW :Single; override;  // 同次成分（無限遠点 = 0）
+     public
+       ///// M E T H O D
+       function Lift( const Pos_:TSingle2D ) :TSingle3D; override;  // どこから見ても ( 0, 0, 1 )
+       function InCircled( const P1_,P2_,P3_:TDelaPoin2D ) :Single; override;  // 円の向き（直線への退化）で決まる
      end;
 
      //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaPoinSet2D
@@ -111,17 +121,17 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
      //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaFace2D
 
-     // 三角形。TriFlip の面に空円判定と外接円を加えたもの。
+     // 三角形。TriFlip の面に空円判定と同次外心を加えたもの。
      TDelaFace2D = class( TTriFace2D<TDelaPoin2D,TDelaFace2D> )
      private
      protected
        ///// A C C E S S O R
        function GetInfCorn :Byte;
-       function GetCircle :TSingleCircle;
+       function GetCircum :TSingle3D;
      public
        ///// P R O P E R T Y
-       property InfCorn :Byte          read GetInfCorn;  // 無限遠頂点の番号（0 = 有限面）
-       property Circle  :TSingleCircle read GetCircle ;  // 描画用（無限遠面では半平面表現）
+       property InfCorn :Byte      read GetInfCorn;  // 無限遠頂点の番号（0 = 有限面）
+       property Circum  :TSingle3D read GetCircum ;  // 同次外心 ( X, Y, W )。有限面は ( X/W, Y/W ) が外心、無限遠面は W = 0 で ( X, Y ) が外向きの方向
        ///// M E T H O D
        class function InCircle( const P1_,P2_,P3_:TDelaPoin2D; const Pos_:TSingle2D ) :Single;  // 統一リフト行列式（正 = 円の内側）
        function IsHitCircle( const Pos_:TSingle2D ) :Boolean;
@@ -175,10 +185,6 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
 //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$【 R O U T I N E 】
 
-function CircumCenter( const P1_,P2_,P3_:TSingle2D ) :TSingle2D;
-
-function LineNormal( const P0_,P1_:TSingle2D ) :TSingle2D;
-
 implementation //############################################################### ■
 
 //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$【 R E C O R D 】
@@ -189,61 +195,93 @@ implementation //###############################################################
 
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& public
 
-//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TSingleCircl2
-
-//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& private
-
-//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& public
-
-constructor TSingleCircl2.Create( const P1_,P2_,P3_:TSingle2D );
-begin
-     Center := CircumCenter( P1_, P2_, P3_ );
-
-     Radiu2 := ( Distance2( Center, P1_ )
-               + Distance2( Center, P2_ )
-               + Distance2( Center, P3_ ) ) / 3;
-end;
-
-//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TSingleCircle
-
-//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& private
-
-//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& public
-
-constructor TSingleCircle.Create( const P1_,P2_,P3_:TSingle2D );
-begin
-     Self := TSingleCircl2.Create( P1_, P2_, P3_ );
-end;
-
-///////////////////////////////////////////////////////////////////////// 型変換
-
-class operator TSingleCircle.Implicit( const Circl2_:TSingleCircl2 ) :TSingleCircle;
-begin
-     with Result do
-     begin
-          Center :=       Circl2_.Center  ;
-          Radius := Roo2( Circl2_.Radiu2 );
-     end;
-end;
-
-class operator TSingleCircle.Implicit( const Circle_:TSingleCircle ) :TSingleCircl2;
-begin
-     with Result do
-     begin
-          Center :=       Circle_.Center  ;
-          Radiu2 := Pow2( Circle_.Radius );
-     end;
-end;
-
 //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$【 C L A S S 】
 
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaPoin2D
 
-//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& private
+//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& protected
+
+//////////////////////////////////////////////////////////////// A C C E S S O R
+
+function TDelaPoin2D.GetInf :Boolean;
+begin
+     Result := False;
+end;
+
+//////////////////////////////////////////////////////////////////// M E T H O D
+
+function TDelaPoin2D.LiftW :Single;
+begin
+     Result := 1;
+end;
+
+//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& public
+
+//////////////////////////////////////////////////////////////////// M E T H O D
+
+function TDelaPoin2D.Lift( const Pos_:TSingle2D ) :TSingle3D;
+begin
+     with Result do
+     begin
+          X := Pos.X - Pos_.X;
+          Y := Pos.Y - Pos_.Y;
+          Z := X * X + Y * Y;
+     end;
+end;
+
+function TDelaPoin2D.InCircled( const P1_,P2_,P3_:TDelaPoin2D ) :Single;
+begin
+     Result := TDelaFace2D.InCircle( P1_, P2_, P3_, Pos );
+end;
+
+//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaPoin2DInf
 
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& protected
 
+//////////////////////////////////////////////////////////////// A C C E S S O R
+
+function TDelaPoin2DInf.GetInf :Boolean;
+begin
+     Result := True;
+end;
+
+//////////////////////////////////////////////////////////////////// M E T H O D
+
+function TDelaPoin2DInf.LiftW :Single;
+begin
+     Result := 0;
+end;
+
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& public
+
+//////////////////////////////////////////////////////////////////// M E T H O D
+
+function TDelaPoin2DInf.Lift( const Pos_:TSingle2D ) :TSingle3D;
+begin
+     with Result do
+     begin
+          X := 0;
+          Y := 0;
+          Z := 1;
+     end;
+end;
+
+function TDelaPoin2DInf.InCircled( const P1_,P2_,P3_:TDelaPoin2D ) :Single;
+//･･･････････････････････････････････････････
+     function Homo( const P_:TDelaPoin2D ) :TSingle3D;  // 同次座標 ( X, Y, W )。無限遠点は ( 0, 0, 0 ) となり行列式から自然に消える
+     begin
+          with Result do
+          begin
+               X := P_.Pos.X;
+               Y := P_.Pos.Y;
+               Z := P_.LiftW;
+          end;
+     end;
+//･･･････････････････････････････････････････
+begin
+     // 無限遠点が円の内側にあるのは、円が負の向きのときだけ（正の向きの円は必ず無限遠点を外に置く）
+     Result := - DotProduct( Homo( P1_ ), CrossProduct( Homo( P2_ ), Homo( P3_ ) ) );
+end;
 
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaPoinSet2D
 
@@ -267,23 +305,29 @@ begin
                       else Result := 0;
 end;
 
-function TDelaFace2D.GetCircle :TSingleCircle;
+function TDelaFace2D.GetCircum :TSingle3D;
 //･･･････････････････････････････････････････
-     function EdgeCircle( const P1_,P2_:TDelaPoin2D ) :TSingleCircle;
+     function Minor( const X1_,Y1_,W1_,X2_,Y2_,W2_,X3_,Y3_,W3_:Single ) :Single;
      begin
-          with Result do
-          begin
-               Center := LineNormal( P1_.Pos, P2_.Pos ).Unitor;
-               Radius := ( DotProduct( Center, P1_.Pos ) + DotProduct( Center, P2_.Pos ) ) / 2;
-          end;
+          Result := DotProduct( TSingle3D.Create( X1_, Y1_, W1_ ),
+              CrossProduct( TSingle3D.Create( X2_, Y2_, W2_ ),
+                            TSingle3D.Create( X3_, Y3_, W3_ ) ) );
      end;
 //･･･････････････････････････････････････････
+var
+   L1, L2, L3 :TSingle3D;
+   W1, W2, W3 :Single;
 begin
-     case InfCorn of
-       0: Result := TSingleCircle.Create( Poin[1].Pos, Poin[2].Pos, Poin[3].Pos );
-       1: Result := EdgeCircle( Poin[2], Poin[3] );
-       2: Result := EdgeCircle( Poin[3], Poin[1] );
-       3: Result := EdgeCircle( Poin[1], Poin[2] );
+     // リフト空間で3頂点を通る平面の係数（小行列式）。無限遠頂点の行は 0 となり、自然に W = 0（直線）へ退化する
+     L1 := Poin[ 1 ].Lift( TSingle2D.Create( 0, 0 ) );  W1 := Poin[ 1 ].LiftW;
+     L2 := Poin[ 2 ].Lift( TSingle2D.Create( 0, 0 ) );  W2 := Poin[ 2 ].LiftW;
+     L3 := Poin[ 3 ].Lift( TSingle2D.Create( 0, 0 ) );  W3 := Poin[ 3 ].LiftW;
+
+     with Result do
+     begin
+          X :=   - Minor( L1.Y, L1.Z, W1,  L2.Y, L2.Z, W2,  L3.Y, L3.Z, W3 );
+          Y :=   + Minor( L1.X, L1.Z, W1,  L2.X, L2.Z, W2,  L3.X, L3.Z, W3 );
+          Z := 2 * Minor( L1.X, L1.Y, W1,  L2.X, L2.Y, W2,  L3.X, L3.Y, W3 );
      end;
 end;
 
@@ -292,35 +336,8 @@ end;
 //////////////////////////////////////////////////////////////////// M E T H O D
 
 class function TDelaFace2D.InCircle( const P1_,P2_,P3_:TDelaPoin2D; const Pos_:TSingle2D ) :Single;
-//･･･････････････････････････････････････････
-     procedure Lift( const P_:TDelaPoin2D; out X_,Y_,Z_:Single );
-     begin
-          if P_.Inf then
-          begin
-               X_ := 0;
-               Y_ := 0;
-               Z_ := 1;
-          end
-          else
-          begin
-               X_ := P_.Pos.X - Pos_.X;
-               Y_ := P_.Pos.Y - Pos_.Y;
-               Z_ := X_ * X_ + Y_ * Y_;
-          end;
-     end;
-//･･･････････････････････････････････････････
-var
-   X1, Y1, Z1,
-   X2, Y2, Z2,
-   X3, Y3, Z3 :Single;
 begin
-     Lift( P1_, X1, Y1, Z1 );
-     Lift( P2_, X2, Y2, Z2 );
-     Lift( P3_, X3, Y3, Z3 );
-
-     Result := X1 * ( Y2 * Z3 - Z2 * Y3 )
-             - Y1 * ( X2 * Z3 - Z2 * X3 )
-             + Z1 * ( X2 * Y3 - Y2 * X3 );
+     Result := DotProduct( P1_.Lift( Pos_ ), CrossProduct( P2_.Lift( Pos_ ), P3_.Lift( Pos_ ) ) );
 end;
 
 function TDelaFace2D.IsHitCircle( const Pos_:TSingle2D ) :Boolean;
@@ -482,6 +499,8 @@ begin
      Result.Poin[ 1 ] := Poin1_;
      Result.Poin[ 2 ] := Poin2_;
      Result.Poin[ 3 ] := Poin3_;
+
+     Result.BindPoins;  // 頂点のアンカーを張り直す（削除時の面探索が O(1) になる）
 end;
 
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& public
@@ -490,9 +509,7 @@ constructor TDelaunay2D.Create;
 begin
      inherited;
 
-     _PoinInf := TDelaPoin2D.Create( TSingle2D.Create( 0, 0 ) );
-
-     _PoinInf._Inf := True;
+     _PoinInf := TDelaPoin2DInf.Create( TSingle2D.Create( 0, 0 ) );
 end;
 
 destructor TDelaunay2D.Destroy;
@@ -567,131 +584,114 @@ end;
 //------------------------------------------------------------------------------
 
 function TDelaunay2D.DeletePoin( const Poin_:TDelaPoin2D ) :Boolean;
-type
-    TLink = record
-      Face :TDelaFace2D;
-      Corn :Byte;
-    end;
 var
-   Ring  :TArray<TDelaPoin2D>;
-   Links :TArray<TLink>;
+   F0 :TDelaFace2D;    C0 :Byte;  // Poin_ の現在位置（面と、その中の角番号）
 //･･･････････････････････････････････････････
-     procedure Link( const F_:TDelaFace2D; const C_:Byte; const L_:TLink );
+     procedure GoNext;  // Poin_ の周りを1面ぶん回る
+     var
+        R :Byte;
      begin
-          F_.Face[ C_ ] := L_.Face;  F_.Corn[ C_ ] := L_.Corn;
+          R := VertTableInc[ C0 ].R;
 
-          L_.Face.Face[ L_.Corn ] := F_;  L_.Face.Corn[ L_.Corn ] := C_;
+          C0 := VertTableInc[ F0.Corn[ R ] ].R;
+          F0 :=               F0.Face[ R ]    ;
      end;
 //･･･････････････････････････････････････････
-     function EarOK( const I_:Integer; const Strict_,GhostTip_:Boolean ) :Boolean;
+     function Degree :Integer;  // Poin_ の周囲の面数
      var
-        K, J :Integer;
-        A, B, C, Q :TDelaPoin2D;
-        D :Single;
+        F :TDelaFace2D;
+     begin
+          Result := 0;
+
+          F := F0;
+          repeat
+                Inc( Result );  GoNext;
+          until F0 = F;
+     end;
+//･･･････････････････････････････････････････
+     function EarOK :Boolean;  // 現在位置の耳 ( A, B, C ) が切り出せるか（＝最終形に現れる面か）
+     var
+        A, B, C :TDelaPoin2D;
+        E, K, R :Byte;
+        F :TDelaFace2D;
      begin
           Result := False;
 
-          K := Length( Ring );
+          E := VertTableInc[ C0 ].L;
 
-          A := Ring[ ( I_ + K-1 ) mod K ];
-          B := Ring[         I_         ];
-          C := Ring[ ( I_ +  1  ) mod K ];
+          A := F0.Poin[ E                    ];
+          B := F0.Poin[ VertTableInc[ C0 ].R ];
+          C := F0.Face[ E ].Poin[ F0.Corn[ E ] ];
 
-          if B.Inf and not GhostTip_ then Exit;
+          // 自分が耳の円の内側にあること（耳が正の向きであることも兼ねる。裏向きの耳は符号が反転して自然に落ちる）
+          if Poin_.InCircled( A, B, C ) <= 0 then Exit;
 
-          // 有限の耳は左折 (正の向き) であること
-          if not ( A.Inf or B.Inf or C.Inf ) then
+          // 耳を外したあとに残る面が有限なら、正の向きであること（無限遠点を含む面は幾何を持たないため無条件に良い）
+          if not ( A.Inf or C.Inf ) then
           begin
-               if CrossProduct( B.Pos - A.Pos, C.Pos - A.Pos ) <= 0 then Exit;
+               if CrossProduct( Poin_.Pos - C.Pos, A.Pos - C.Pos ) <= 0 then Exit;
           end;
 
-          // 外接円が他のリング頂点を含まないこと
-          for J := 0 to K-1 do
-          begin
-               Q := Ring[ J ];
+          // 耳の円が他のリング頂点を含まないこと（自分自身や無限遠点との判定は行列式が 0 以下となり、スキップは要らない）
+          F := F0;
+          K := C0;
+          repeat
+                if F.Poin[ VertTableInc[ K ].R ].InCircled( A, B, C ) > 0 then Exit;
 
-               if ( Q = A ) or ( Q = B ) or ( Q = C ) or Q.Inf then Continue;
+                R := VertTableInc[ K ].R;
 
-               D := TDelaFace2D.InCircle( A, B, C, Q.Pos );
-
-               if Strict_ then begin if D >= 0 then Exit; end
-                          else begin if D >  0 then Exit; end;
-          end;
+                K := VertTableInc[ F.Corn[ R ] ].R;
+                F :=               F.Face[ R ]    ;
+          until F = F0;
 
           Result := True;
      end;
 //･･･････････････････････････････････････････
-     procedure Clip( const I_:Integer );
+     procedure ClipEar;  // 耳の底辺（Poin_ と B を結ぶ辺）をフリップして、次数を1つ下げる
      var
-        K, J :Integer;
+        E, G :Byte;
         F :TDelaFace2D;
      begin
-          K := Length( Ring );
+          E := VertTableInc[ C0 ].L;
 
-          F := NewFace( Ring[ ( I_ + K-1 ) mod K ],
-                        Ring[         I_         ],
-                        Ring[ ( I_ +  1  ) mod K ] );
+          F := F0.Face[ E ];
+          G := F0.Corn[ E ];
 
-          Link( F, 3, Links[ ( I_ + K-1 ) mod K ] );  // 辺 (A,B)
-          Link( F, 1, Links[         I_         ] );  // 辺 (B,C)
+          F0.FlipEdge( E );  // 耳 ( A, B, C ) がそのまま完成品の面になる
 
-          for J := I_ to K-2 do
-          begin
-               Ring [ J ] := Ring [ J+1 ];
-               Links[ J ] := Links[ J+1 ];
-          end;
-          SetLength( Ring , K-1 );
-          SetLength( Links, K-1 );
-
-          if I_ = 0 then J := K-2
-                    else J := I_-1;
-
-          Links[ J ].Face := F;  // 新リング辺 (A,C) は corner 2 の向かい
-          Links[ J ].Corn := 2;
+          F0 := F;                      // フリップ後、Poin_ は隣の面へ移る
+          C0 := VertTableInc[ G ].L;
      end;
 //･･･････････････････････････････････････････
-     procedure Fill;
+     procedure Unhook;  // 次数3になった Poin_ を、3面 → 1面の畳み込みで取り除く
      var
-        Pass, I :Integer;
-        Done :Boolean;
+        I :Integer;
+        R :Byte;
         F :TDelaFace2D;
+        Ws :array [ 0..2 ] of TDelaPoin2D;
+        Fs :array [ 0..2 ] of TDelaFace2D;
+        Cs :array [ 0..2 ] of Byte;
      begin
-          while Length( Ring ) > 3 do
+          for I := 0 to 2 do  // リング頂点と外側リンクを収集する（収集順は時計回り）
           begin
-               Done := False;
+               R := VertTableInc[ C0 ].R;
 
-               for Pass := 1 to 3 do  // 1:厳密 → 2:非厳密(有限の耳先のみ) → 3:非厳密(∞の耳先も)
-               begin
-                    for I := 0 to Length( Ring )-1 do
-                    begin
-                         if EarOK( I, Pass = 1, Pass <> 2 ) then
-                         begin
-                              Clip( I );  Done := True;  Break;
-                         end;
-                    end;
+               Ws[ I ] := F0.Poin[ R  ];
+               Fs[ I ] := F0.Face[ C0 ];
+               Cs[ I ] := F0.Corn[ C0 ];
 
-                    if Done then Break;
-               end;
-
-               Assert( Done, 'DeletePoin: ear deadlock' );
-               if not Done then Break;
+               F := F0;  GoNext;  F.Free;
           end;
 
-          F := NewFace( Ring[ 0 ], Ring[ 1 ], Ring[ 2 ] );
+          F := NewFace( Ws[ 2 ], Ws[ 1 ], Ws[ 0 ] );  // 反転して正の向きにする
 
-          Link( F, 3, Links[ 0 ] );
-          Link( F, 1, Links[ 1 ] );
-          Link( F, 2, Links[ 2 ] );
+          F.Face[ 3 ] := Fs[ 1 ];  F.Corn[ 3 ] := Cs[ 1 ];   Fs[ 1 ].Face[ Cs[ 1 ] ] := F;  Fs[ 1 ].Corn[ Cs[ 1 ] ] := 3;
+          F.Face[ 1 ] := Fs[ 0 ];  F.Corn[ 1 ] := Cs[ 0 ];   Fs[ 0 ].Face[ Cs[ 0 ] ] := F;  Fs[ 0 ].Corn[ Cs[ 0 ] ] := 1;
+          F.Face[ 2 ] := Fs[ 2 ];  F.Corn[ 2 ] := Cs[ 2 ];   Fs[ 2 ].Face[ Cs[ 2 ] ] := F;  Fs[ 2 ].Corn[ Cs[ 2 ] ] := 2;
      end;
 //･･･････････････････････････････････････････
 var
-   K, J :Integer;
-   C, C1, R :Byte;
-   F0, F, F1 :TDelaFace2D;
-   Star :TArray<TDelaFace2D>;
-   Ws   :TArray<TDelaPoin2D>;
-   Ls   :TArray<TLink>;
-   L :TLink;
+   K, Guard :Integer;
 begin
      Result := False;
 
@@ -707,49 +707,25 @@ begin
                Poin_.Free;
           end;
      else
-          // 頂点を含む面を1つ探す
-          F0 := nil;  C := 0;
-          for F in Faces do
+          F0 := Poin_.Face;  C0 := Poin_.Corn;  // 頂点のアンカーから所属面へ直行する
+
+          if not Assigned( F0 ) then Exit;
+
+          // 有効な耳の底辺をフリップして外していき、次数を3まで下げる
+          K := Degree;
+
+          Guard := 2 * K * K + 8;  // 有効な耳は必ず存在するので、これを超えたら異常
+
+          while K > 3 do
           begin
-               for C1 := 1 to 3 do
-               begin
-                    if F.Poin[ C1 ] = Poin_ then begin F0 := F;  C := C1;  Break; end;
-               end;
-               if Assigned( F0 ) then Break;
-          end;
-          if F0 = nil then Exit;
+               if EarOK then begin ClipEar;  Dec( K ); end
+                        else GoNext;
 
-          // 星型領域を回転収集（境界辺の外側リンクも記録）
-          Star := nil;  Ws := nil;  Ls := nil;
-          F := F0;
-          repeat
-                R := VertTableInc[ C ].R;
-
-                Star := Star + [ F ];
-                Ws   := Ws   + [ F.Poin[ R ] ];
-
-                L.Face := F.Face[ C ];
-                L.Corn := F.Corn[ C ];
-                Ls := Ls + [ L ];
-
-                C1 := F.Corn[ R ];
-                F  := F.Face[ R ];
-                C  := VertTableInc[ C1 ].R;
-          until F = F0;
-
-          for F1 in Star do F1.Free;
-
-          // 収集順は時計回りなので反転して正の向きのリングにする
-          K := Length( Ws );
-          SetLength( Ring , K );
-          SetLength( Links, K );
-          for J := 0 to K-1 do
-          begin
-               Ring [ J ] := Ws[ K-1-J ];
-               Links[ J ] := Ls[ ( K-2-J + K ) mod K ];
+               Dec( Guard );  Assert( Guard > 0, 'DeletePoin: ear deadlock' );
+               if Guard <= 0 then begin _OnChange.Run( Self );  Exit; end;  // 異常時は削除を断念する（分割は正しいまま残る）
           end;
 
-          Fill;
+          Unhook;
 
           Poin_.Free;
      end;
@@ -767,38 +743,11 @@ begin
 
      Poins.Clear;      // 点を全解放する（PoinInf は集合外なので残る）
 
+     _PoinInf.Face := nil;
+
      _OnChange.Run( Self );
 end;
 
 //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$【 R O U T I N E 】
-
-function CircumCenter( const P1_,P2_,P3_:TSingle2D ) :TSingle2D;
-var
-   L1, L2, L3, W :Single;
-   E1, E2, E3 :TSingle2D;
-begin
-     L1 := P1_.Size2;  E1 := P3_ - P2_;
-     L2 := P2_.Size2;  E2 := P1_ - P3_;
-     L3 := P3_.Size2;  E3 := P2_ - P1_;
-
-     W := 2 * ( P2_.X * P1_.Y - P1_.X * P2_.Y
-              + P3_.X * P2_.Y - P2_.X * P3_.Y
-              + P1_.X * P3_.Y - P3_.X * P1_.Y );
-
-     with Result do
-     begin
-          X := ( L1 * E1.Y + L2 * E2.Y + L3 * E3.Y ) / +W;
-          Y := ( L1 * E1.X + L2 * E2.X + L3 * E3.X ) / -W;
-     end;
-end;
-
-function LineNormal( const P0_,P1_:TSingle2D ) :TSingle2D;
-begin
-     with P0_.VectorTo( P1_ ) do
-     begin
-          Result.X := +Y;
-          Result.Y := -X;
-     end;
-end;
 
 end. //######################################################################### ■
