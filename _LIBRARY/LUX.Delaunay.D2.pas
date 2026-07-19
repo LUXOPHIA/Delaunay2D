@@ -43,6 +43,12 @@
 //   平面の係数（小行列式）そのものであり、有限面は ( X/W, Y/W ) が外心、無限遠面は
 //   自然に W = 0 へ退化して ( X, Y ) がボロノイ辺の外向きの方向を表す。
 //   計算に分岐も除算もなく、中心＋半径という表現の押し付けが要らない。
+// ・追加点を空円に含む面の検索はジャンプ＆ウォーク。点集合から n^(1/3) 個を無作為に
+//   引き、最も近い点のアンカー面から、追加点が外側にある辺を越えて隣へ渡り続ける
+//   （期待 O(n^(1/3))）。辺の向き判定は統一述語の退化形 InCircle( A, B, ∞, P ) で
+//   あり、凸包外の点では歩行が自然に無限遠面へ入って止まる。標本は毎回引き直す
+//   ため、性能はクエリの履歴や位置に依らず領域全体で一様。最近傍検索（FindPoin）
+//   も同じ標本から出発し、ドロネー辺を伝う最近傍への貪欲降下で行う。
 
 interface //#################################################################### ■
 
@@ -163,6 +169,8 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
        function FaceTree( const Poin_:TDelaPoin2D; const Face_:TDelaFace2D; const Vert_:Byte ) :TFaceJoint;
        procedure Connect( const J_,JL_,JR_:TFaceJoint );
        procedure InsertPoin( const Poin_:TDelaPoin2D; const Face_:TDelaFace2D );
+       function JumpPoin( const Pos_:TSingle2D ) :TDelaPoin2D;
+       function ScanCircleFace( const Pos_:TSingle2D ) :TDelaFace2D;
      protected
        ///// M E T H O D
        function NewPoin( const Pos_:TSingle2D ) :TDelaPoin2D;
@@ -175,8 +183,8 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
        property Faces    :TDelaFaceSet2D read GetFaces ;  // 面の集合（＝自分自身）
        property OnChange :TDelegates     read _OnChange;  // 構造が変化したときに発火（Add / Del で多播購読）
        ///// M E T H O D
-       function HitCircleFace( const Pos_:TSingle2D ) :TDelaFace2D;
-       function FindPoin( const Pos_:TSingle2D; const Radius_:Single ) :TDelaPoin2D;
+       function HitCircleFace( const Pos_:TSingle2D ) :TDelaFace2D;  // Pos_ を空円に含む面（ジャンプ＆ウォーク・期待 O(n^(1/3))）
+       function FindPoin( const Pos_:TSingle2D; const Radius_:Single ) :TDelaPoin2D;  // Pos_ の最近傍点（Radius_ 内に無ければ nil）
        function AddPoin( const Pos_:TSingle2D ) :TDelaPoin2D; overload;
        function AddPoin( const Pos_:TSingle2D; const Face_:TDelaFace2D ) :TDelaPoin2D; overload;
        function DeletePoin( const Poin_:TDelaPoin2D ) :Boolean;
@@ -483,6 +491,40 @@ begin
      Connect( J3, J1, J2 );
 end;
 
+//------------------------------------------------------------------------------
+
+function TDelaunay2D.JumpPoin( const Pos_:TSingle2D ) :TDelaPoin2D;
+var
+   N, K, I :Integer;
+   P :TDelaPoin2D;
+   D, Dm :Single;
+begin
+     N := Poins.ChildrsN;
+
+     Result := Poins[ Random( N ) ];  Dm := Distance2( Pos_, Result.Pos );
+
+     K := 1;  while K * K * K < N do Inc( K );  // 標本数 = ⌈n^(1/3)⌉（歩行距離との釣り合いで合計が期待 O(n^(1/3)) になる）
+
+     for I := 2 to K do
+     begin
+          P := Poins[ Random( N ) ];  D := Distance2( Pos_, P.Pos );
+
+          if D < Dm then begin  Dm := D;  Result := P;  end;
+     end;
+end;
+
+function TDelaunay2D.ScanCircleFace( const Pos_:TSingle2D ) :TDelaFace2D;
+var
+   F :TDelaFace2D;
+begin
+     for F in Faces do  // 全面走査（歩行の保険。退化配置でのみ使われる）
+     begin
+          if F.IsHitCircle( Pos_ ) then Exit( F );
+     end;
+
+     Result := nil;
+end;
+
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& protected
 
 //////////////////////////////////////////////////////////////////// M E T H O D
@@ -524,13 +566,47 @@ end;
 function TDelaunay2D.HitCircleFace( const Pos_:TSingle2D ) :TDelaFace2D;
 var
    F :TDelaFace2D;
+   N, O, I :Integer;
+   E, K :Byte;
 begin
-     for F in Faces do
+     F := JumpPoin( Pos_ ).Face;  // ジャンプ：無作為標本の最近点のアンカー面から出発する
+
+     if not Assigned( F ) then Exit( ScanCircleFace( Pos_ ) );
+
+     for N := 1 to 4 * ChildrsN + 8 do  // ウォーク：Pos_ が外側にある辺を越えて隣へ渡り続ける（面数程度で必ず着く）
      begin
-          if F.IsHitCircle( Pos_ ) then Exit( F );
+          if F.InfCorn > 0 then  // 無限遠面（凸包外の楔）
+          begin
+               if F.IsHitCircle( Pos_ ) then Exit( F );  // Pos_ は凸包辺の外側 → この半平面が空円
+
+               F := F.Face[ F.InfCorn ];  // 凸包の内側へ渡る
+          end
+          else
+          begin
+               K := 0;
+
+               O := Random( 3 );  // 調べる辺の順を無作為化した確率的歩行（共円退化での振動を防ぐ）
+
+               for I := 0 to 2 do
+               begin
+                    E := 1 + ( O + I ) mod 3;
+
+                    with VertTableInc[ E ] do  // 辺の向き判定は統一述語の退化形（第3点に無限遠頂点を与えると orient2d になる）
+                    begin
+                         if TDelaFace2D.InCircle( F.Poin[ L ], F.Poin[ R ], _PoinInf, Pos_ ) < 0 then K := E;
+                    end;
+
+                    if K > 0 then Break;
+               end;
+
+               if K > 0 then F := F.Face[ K ]
+               else
+               if F.IsHitCircle( Pos_ ) then Exit( F )                        // 内包面に到達（三角形 ⊆ 外接円）
+                                        else Exit( ScanCircleFace( Pos_ ) );  // 共円・重複の退化 → 全面走査で確定する
+          end;
      end;
 
-     Result := nil;
+     Result := ScanCircleFace( Pos_ );  // 歩行が収束しない退化配置 → 全面走査へ退避する
 end;
 
 //------------------------------------------------------------------------------
@@ -564,21 +640,55 @@ end;
 function TDelaunay2D.FindPoin( const Pos_:TSingle2D; const Radius_:Single ) :TDelaPoin2D;
 var
    P :TDelaPoin2D;
-   D, Dm :Single;
+   Dm :Single;
+//･･･････････････････････････････････････････
+     function GoNear :Boolean;  // P の隣接頂点に今より近い点があれば移る
+     var
+        F0, F :TDelaFace2D;
+        C, R :Byte;
+        W :TDelaPoin2D;
+        D :Single;
+     begin
+          Result := False;
+
+          F0 := P.Face;
+
+          if not Assigned( F0 ) then Exit;
+
+          F := F0;
+          C := P.Corn;
+          repeat
+                R := VertTableInc[ C ].R;
+
+                W := F.Poin[ R ];
+
+                if not W.Inf then
+                begin
+                     D := Distance2( Pos_, W.Pos );
+
+                     if D < Dm then begin  P := W;  Dm := D;  Exit( True );  end;
+                end;
+
+                C := VertTableInc[ F.Corn[ R ] ].R;
+                F :=               F.Face[ R ]    ;
+          until F = F0;
+     end;
+//･･･････････････････････････････････････････
+var
+   N :Integer;
 begin
      Result := nil;
 
-     Dm := Pow2( Radius_ );
+     if Poins.ChildrsN = 0 then Exit;
 
-     for P in Poins do
-     begin
-          D := Distance2( Pos_, P.Pos );
+     P := JumpPoin( Pos_ );  Dm := Distance2( Pos_, P.Pos );  // 無作為標本の最近点から出発し、
 
-          if D < Dm then
-          begin
-               Dm := D;  Result := P;
-          end;
+     for N := 1 to Poins.ChildrsN do  // ドロネー辺を伝って近い方へ降下する。移るたびに距離が縮むので移動は
+     begin                            // 高々 n-1 回であり、Pos_ をボロノイ領域に含む点 ＝ 最近傍点で必ず停止する
+          if not GoNear then Break;
      end;
+
+     if Dm < Pow2( Radius_ ) then Result := P;
 end;
 
 //------------------------------------------------------------------------------
@@ -691,7 +801,7 @@ var
      end;
 //･･･････････････････････････････････････････
 var
-   K, Guard :Integer;
+   N, K :Integer;
 begin
      Result := False;
 
@@ -714,16 +824,17 @@ begin
           // 有効な耳の底辺をフリップして外していき、次数を3まで下げる
           K := Degree;
 
-          Guard := 2 * K * K + 8;  // 有効な耳は必ず存在するので、これを超えたら異常
-
-          while K > 3 do
+          for N := 1 to 2 * K * K + 8 do  // 有効な耳は必ず存在するので、この回数までに必ず次数3に達する
           begin
+               if K = 3 then Break;
+
                if EarOK then begin ClipEar;  Dec( K ); end
                         else GoNext;
-
-               Dec( Guard );  Assert( Guard > 0, 'DeletePoin: ear deadlock' );
-               if Guard <= 0 then begin _OnChange.Run( Self );  Exit; end;  // 異常時は削除を断念する（分割は正しいまま残る）
           end;
+
+          Assert( K = 3, 'DeletePoin: ear deadlock' );
+
+          if K > 3 then begin  _OnChange.Run( Self );  Exit;  end;  // 異常時は削除を断念する（分割は正しいまま残る）
 
           Unhook;
 
