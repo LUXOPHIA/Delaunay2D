@@ -233,8 +233,8 @@ implementation //###############################################################
 function Det3( const A_,B_,C_:TDouble4D ) :Double;
 begin
      Result := DotProduct( TDouble3D.Create( A_.X, A_.Y, A_.Z ),
-         CrossProduct( TDouble3D.Create( B_.X, B_.Y, B_.Z ),
-                       TDouble3D.Create( C_.X, C_.Y, C_.Z ) ) );
+             CrossProduct( TDouble3D.Create( B_.X, B_.Y, B_.Z ),
+                           TDouble3D.Create( C_.X, C_.Y, C_.Z ) ) );
 end;
 
 // 4行のリフト行列式（列順 W,X,Y,Z の 4×4 行列式）。正の向きの胞で「内側 = 正」となる符号
