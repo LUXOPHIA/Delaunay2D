@@ -606,7 +606,7 @@ begin
      begin
           Parent            := Self;
           Align             := TAlignLayout.Client;
-          Color             := TAlphaColor( $FF696969 );  // DimGray
+          Color             := TAlphaColors.Black;
           HitTest           := False;  // マウスはフレーム（自分）が受ける
           UsingDesignCamera := False;
 
