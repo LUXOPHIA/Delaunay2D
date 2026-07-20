@@ -15,12 +15,14 @@ type
     Viewer1: TDelaunayViewer;
     Panel1: TPanel;
       ButtonC: TButton;
-      ButtonR: TButton;
+      ButtonA: TButton;
+      ButtonD: TButton;
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
     procedure Viewer1MouseDown(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Single);
     procedure ButtonCClick(Sender: TObject);
-    procedure ButtonRClick(Sender: TObject);
+    procedure ButtonAClick(Sender: TObject);
+    procedure ButtonDClick(Sender: TObject);
   private
     { private 宣言 }
   public
@@ -49,8 +51,8 @@ begin
 
           with Camera do
           begin
-               SizeX := 400;
-               SizeY := 400;
+               SizeX := 600;
+               SizeY := 600;
           end;
 
           with Poins.Style do
@@ -79,6 +81,8 @@ begin
                LineThick := 0.5;
           end;
      end;
+
+     ButtonAClick( Sender );
 end;
 
 procedure TForm1.FormDestroy(Sender: TObject);
@@ -110,11 +114,21 @@ begin
      _Delaunay.Clear;
 end;
 
-procedure TForm1.ButtonRClick(Sender: TObject);
+procedure TForm1.ButtonAClick(Sender: TObject);
 var
    N :Integer;
 begin
-     for N := 1 to 100 do _Delaunay.AddPoin( 100 * TSingle2D.RandG );
+     for N := 1 to 10 do _Delaunay.AddPoin( 100 * TSingle2D.RandG );
+end;
+
+procedure TForm1.ButtonDClick(Sender: TObject);
+var
+   N :Integer;
+begin
+     for N := 1 to Min( 10, _Delaunay.Poins.Count ) do
+     begin
+          _Delaunay.DeletePoin( _Delaunay.Poins[ Random( _Delaunay.Poins.Count ) ] );
+     end;
 end;
 
 end. //######################################################################### ■
