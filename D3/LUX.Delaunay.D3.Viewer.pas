@@ -5,14 +5,23 @@
 // ・TDelaunay3D を受けて FMX の 3D シーン（TViewport3D）を構築し、レンダリングする。
 //   FMX のシーン生成コードはすべてこのフレームの中に閉じており、アプリケーション側
 //   （Main）には現れない。
-// ・シーンは4枚のレイヤからなる（TControl3D 派生。Render で頂点バッファを直接描画）。
-//     TDelaunayPoins … 頂点　　　（球: 緯度4分割 × 経度8分割・Radius）
-//     TDelaunayEdges … ドロネー辺（円柱: 円周8分割・Radius。辺の周りの環の代表胞だけが描いて重複を消す）
-//     TDelaunayCells … 四面体　　（重心座標で頂点を補間した Shrink 倍の四面体を胞の中に浮かべる）
-//     TDelaunayVoros … ボロノイ辺（線分。無限遠胞へは外向きの半直線）
-//   各レイヤは BuildScene( Delaunay_ ) で自分のメッシュを構築する。色や寸法は
-//   Viewer1.Cells.Color / Shrink のように、レイヤのプロパティで変更する。
-//   球と円柱は放射方向の頂点法線（滑らか）、四面体は面法線（フラット）を明示的に張る。
+// ・シーンは2枚のレイヤからなる（TControl3D 派生。Render で頂点バッファを直接描画）。
+//     TDelaunayEdges … ドロネー辺
+//     TDelaunayVoros … ボロノイ辺
+//   どちらも円柱のような「辺の芯」を張らない。四面体の面やボロノイ面の一部を、
+//   辺から MarginCorner の幅だけ切り出した平面の帯・柱・錐だけで構成する
+//   （旧 ・Delaunay3D2 のポリゴン化の洗練。曲面が無いのでフラットな面法線が
+//   辺の稜線をそのまま見せ、図の構造だけが浮かび上がる）。
+// ・ドロネー辺: 各有限胞の各頂点 K について、頂点を囲む3面のコーナー点
+//   （MarginCorner = 角の二等分線上、両辺から距離 Margin の点）を結ぶ4枚の
+//   三角形（中央の1枚＋辺沿いの3枚）を張る。辺のまわりでは環をなす胞の帯が
+//   繋がって、辺を包む多角形の管が閉じる。凸包の面（無限遠胞に接する面）は
+//   さらに外側の帯を張って管を閉じる。
+// ・ボロノイ辺: 各有限胞の外心（＝ボロノイ頂点）のまわりに、そこから出る4本の
+//   ボロノイ辺の方向の対ごとのコーナー三角形（4枚で外心を囲む殻）を張り、
+//   有限の隣の外心へは三角柱の半分（3枚）を渡して両側から1本の柱を完成させる。
+//   無限遠胞へは長さ RayLength の錐で閉じる。辺の方向は隣接胞の同次外心から
+//   得られる（有限胞 → 外心まで、無限遠胞 → W = 0 に退化して外向きの方向）。
 // ・シーンの再構築は「全廃棄・全構築」とし、描画の直前まで遅延して1フレームに
 //   1回だけ行う（内部の TViewport3D の Paint の先頭で溜まった変更を反映する）。
 // ・強制的に軌道リグ（Yaw → Pitch → TCamera）とヘッドライトを生成して保持する
@@ -33,122 +42,59 @@ uses
 type
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaunayLayer
 
-  // レイヤの基底。メッシュデータの器と、三角形・線分の構築と描画。
+  // レイヤの基底。メッシュデータの器と材質、三角形の構築と描画。
   TDelaunayLayer = class( TControl3D )
   private
   protected
     _Geometry :TMeshData;
-    ///// M E T H O D
-    procedure MakeMesh( const Ps_,Ns_:array of TSingle3D );  // 3点ずつ三角形にする（法線つき）
-    procedure MakeLines( const Ps_:array of TSingle3D );     // 2点ずつ線分にする
-    procedure DrawTrias( const Material_:TMaterialSource );
-    procedure DrawLines( const Material_:TMaterialSource );
-  public
-    constructor Create( Owner_:TComponent ); override;
-    destructor Destroy; override;
-    ///// M E T H O D
-    procedure BuildScene( const Delaunay_:TDelaunay3D ); virtual; abstract;
-  end;
-
-  //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaunayFillLayer
-
-  // 面のレイヤ（陰影あり）。
-  TDelaunayFillLayer = class( TDelaunayLayer )
-  private
-  protected
     _Material :TLightMaterialSource;
     ///// A C C E S S O R
     function GetColor :TAlphaColor;
     procedure SetColor( const Color_:TAlphaColor );
     ///// M E T H O D
+    procedure MakeMesh( const Ps_,Ns_:array of TSingle3D );  // 3点ずつ三角形にする（法線つき）
     procedure Render; override;
   public
     constructor Create( Owner_:TComponent ); override;
+    destructor Destroy; override;
     ///// P R O P E R T Y
     property Color :TAlphaColor read GetColor write SetColor;
-  end;
-
-  //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaunayLineLayer
-
-  // 線のレイヤ（単色）。
-  TDelaunayLineLayer = class( TDelaunayLayer )
-  private
-  protected
-    _Material :TColorMaterialSource;
-    ///// A C C E S S O R
-    function GetColor :TAlphaColor;
-    procedure SetColor( const Color_:TAlphaColor );
     ///// M E T H O D
-    procedure Render; override;
-  public
-    constructor Create( Owner_:TComponent ); override;
-    ///// P R O P E R T Y
-    property Color :TAlphaColor read GetColor write SetColor;
-  end;
-
-  //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaunayPoins
-
-  // 頂点レイヤ（球）
-  TDelaunayPoins = class( TDelaunayFillLayer )
-  private
-    _Radius :Single;
-    ///// A C C E S S O R
-    procedure SetRadius( const Radius_:Single );
-  protected
-  public
-    constructor Create( Owner_:TComponent ); override;
-    ///// P R O P E R T Y
-    property Radius :Single read _Radius write SetRadius;  // 点の半径
-    ///// M E T H O D
-    procedure BuildScene( const Delaunay_:TDelaunay3D ); override;
+    procedure BuildScene( const Delaunay_:TDelaunay3D ); virtual; abstract;
   end;
 
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaunayEdges
 
-  // ドロネー辺レイヤ（円柱）
-  TDelaunayEdges = class( TDelaunayFillLayer )
+  // ドロネー辺レイヤ（面の枠の張り合わせによる多角形の管）
+  TDelaunayEdges = class( TDelaunayLayer )
   private
-    _Radius :Single;
+    _Margin :Single;
     ///// A C C E S S O R
-    procedure SetRadius( const Radius_:Single );
+    procedure SetMargin( const Margin_:Single );
   protected
   public
     constructor Create( Owner_:TComponent ); override;
     ///// P R O P E R T Y
-    property Radius :Single read _Radius write SetRadius;  // 辺の半径
-    ///// M E T H O D
-    procedure BuildScene( const Delaunay_:TDelaunay3D ); override;
-  end;
-
-  //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaunayCells
-
-  // 四面体レイヤ（重心座標で補間した縮小四面体）
-  TDelaunayCells = class( TDelaunayFillLayer )
-  private
-    _Shrink :Single;
-    ///// A C C E S S O R
-    procedure SetShrink( const Shrink_:Single );
-  protected
-  public
-    constructor Create( Owner_:TComponent ); override;
-    ///// P R O P E R T Y
-    property Shrink :Single read _Shrink write SetShrink;  // 重心への縮小率（1 = 原寸、既定 = 1/2）
+    property Margin :Single read _Margin write SetMargin;  // 辺から枠までの幅
     ///// M E T H O D
     procedure BuildScene( const Delaunay_:TDelaunay3D ); override;
   end;
 
   //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaunayVoros
 
-  // ボロノイ辺レイヤ
-  TDelaunayVoros = class( TDelaunayLineLayer )
+  // ボロノイ辺レイヤ（コーナー殻と三角柱・錐）
+  TDelaunayVoros = class( TDelaunayLayer )
   private
+    _Margin    :Single;
     _RayLength :Single;
     ///// A C C E S S O R
+    procedure SetMargin( const Margin_:Single );
     procedure SetRayLength( const RayLength_:Single );
   protected
   public
     constructor Create( Owner_:TComponent ); override;
     ///// P R O P E R T Y
+    property Margin    :Single read _Margin    write SetMargin   ;  // 辺から柱の面までの幅
     property RayLength :Single read _RayLength write SetRayLength;  // 無限遠胞へ伸びる半直線の長さ
     ///// M E T H O D
     procedure BuildScene( const Delaunay_:TDelaunay3D ); override;
@@ -177,8 +123,6 @@ type
     _Pitch    :TDummy;
     _Camera   :TCamera;
     _Light    :TLight;
-    _Poins    :TDelaunayPoins;
-    _Cells    :TDelaunayCells;
     _Edges    :TDelaunayEdges;
     _Voros    :TDelaunayVoros;
     ///// A C C E S S O R
@@ -200,9 +144,7 @@ type
     property Color    :TAlphaColor read GetColor    write SetColor   ;  // 背景色
     property Distance :Single      read GetDistance write SetDistance;  // 注視点（原点）からの距離
     ///// P R O P E R T Y （レイヤ）
-    property Poins :TDelaunayPoins read _Poins;  // 頂点　　（Viewer1.Poins.Radius など）
-    property Cells :TDelaunayCells read _Cells;  // 四面体
-    property Edges :TDelaunayEdges read _Edges;  // ドロネー辺
+    property Edges :TDelaunayEdges read _Edges;  // ドロネー辺（Viewer1.Edges.Margin など）
     property Voros :TDelaunayVoros read _Voros;  // ボロノイ辺
     ///// M E T H O D
     procedure Orbit( const DYaw_,DPitch_:Single );  // 軌道リグを回す（度）
@@ -216,87 +158,82 @@ implementation //###############################################################
 
 //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$【 R O U T I N E 】
 
-//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% AddSphere / AddTube
+//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% AddTria / MarginCorner
 
-// 球（緯度 4 分割 × 経度 8 分割）を張る。法線は放射方向（滑らか）
-procedure AddSphere( var Ps_,Ns_:TArray<TSingle3D>; const Center_:TSingle3D; const Radius_:Single );
-const
-     LatN = 4;
-     LonN = 8;
-//･･･････････････････････････････････････････
-     function Dir( const I_,J_:Integer ) :TSingle3D;  // 緯度 I_ ・経度 J_ の単位方向
-     var
-        T, P :Single;
-     begin
-          T := Pi  * ( I_ / LatN - 0.5 );
-          P := Pi2 * ( J_ / LonN       );
-
-          Result := TSingle3D.Create( Cos( T ) * Cos( P ), Sin( T ), Cos( T ) * Sin( P ) );
-     end;
-//･･･････････････････････････････････････････
+// 三角形を1枚足す（面法線フラット。潰れた三角形は捨てる）
+procedure AddTria( var Ps_,Ns_:TArray<TSingle3D>; const P1_,P2_,P3_:TSingle3D );
 var
-   I, J :Integer;
-   D00, D01, D10, D11 :TSingle3D;
+   N :TSingle3D;
 begin
-     for I := 0 to LatN-1 do
-     begin
-          for J := 0 to LonN-1 do
-          begin
-               D00 := Dir( I  , J   );
-               D01 := Dir( I  , J+1 );
-               D10 := Dir( I+1, J   );
-               D11 := Dir( I+1, J+1 );
+     N := CrossProduct( P3_ - P1_, P2_ - P1_ );  // FMX は左手系なので、表（カリングで残る側）の法線は逆順の外積
 
-               if I > 0 then  // 南極の帯は下辺が1点に潰れる
-               begin
-                    Ps_ := Ps_ + [ Center_ + Radius_ * D00, Center_ + Radius_ * D11, Center_ + Radius_ * D01 ];
-                    Ns_ := Ns_ + [ D00, D11, D01 ];
-               end;
+     if N.Size2 = 0 then Exit;
 
-               if I < LatN-1 then  // 北極の帯は上辺が1点に潰れる
-               begin
-                    Ps_ := Ps_ + [ Center_ + Radius_ * D00, Center_ + Radius_ * D10, Center_ + Radius_ * D11 ];
-                    Ns_ := Ns_ + [ D00, D10, D11 ];
-               end;
-          end;
-     end;
+     N := N.Unitor;
+
+     Ps_ := Ps_ + [ P1_, P2_, P3_ ];
+     Ns_ := Ns_ + [ N  , N  , N   ];
 end;
 
-// 円柱（円周 8 分割）を張る。法線は放射方向（軸の周りに滑らか）
-procedure AddTube( var Ps_,Ns_:TArray<TSingle3D>; const A_,B_:TSingle3D; const Radius_:Single );
-const
-     SegN = 8;
+// 原点から V1_・V2_ へ伸びる2辺の間に取るコーナー点。角の二等分線上にあり、
+// どちらの辺からも距離 Margin_ に置かれる。三角形 ( 0, V1_, V2_ ) の内接円半径で
+// クランプするので、鋭角や短い辺でも隣のコーナーと交差しない。
+// 退化（零辺・平行）では角の点そのもの（零ベクトル）に落ちる。
+function MarginCorner( const V1_,V2_:TSingle3D; Margin_:Single ) :TSingle3D; overload;
 var
-   X, U, V, N0, N1 :TSingle3D;
-   P00, P01, P10, P11 :TSingle3D;
-   T0, T1 :Single;
-   J :Integer;
+   L1, L2, S2, R :Single;
+   E1, E2 :TSingle3D;
 begin
-     X := ( B_ - A_ );
+     L1 := V1_.Size;
+     L2 := V2_.Size;
 
-     if X.Size2 = 0 then Exit;
+     if ( L1 = 0 ) or ( L2 = 0 ) then Exit( TSingle3D.Create( 0, 0, 0 ) );
 
-     X := X.Unitor;
+     E1 := V1_ / L1;
+     E2 := V2_ / L2;
 
-     if Abs( X.Z ) < 0.9 then U := CrossProduct( X, TSingle3D.IdentityZ ).Unitor   // 軸と平行でない補助軸から基底を作る
-                         else U := CrossProduct( X, TSingle3D.IdentityY ).Unitor;
+     S2 := 1 - Pow2( DotProduct( E1, E2 ) );
 
-     V := CrossProduct( X, U );
+     if S2 <= 0 then Exit( TSingle3D.Create( 0, 0, 0 ) );
 
-     for J := 0 to SegN-1 do
-     begin
-          T0 := Pi2 *   J       / SegN;
-          T1 := Pi2 * ( J + 1 ) / SegN;
+     R := CrossProduct( V1_, V2_ ).Size / ( L1 + L2 + Distance( V1_, V2_ ) );  // 内接円半径 = 2×面積 ÷ 周長
 
-          N0 := Cos( T0 ) * U + Sin( T0 ) * V;
-          N1 := Cos( T1 ) * U + Sin( T1 ) * V;
+     if R < Margin_ then Margin_ := R;
 
-          P00 := A_ + Radius_ * N0;   P10 := B_ + Radius_ * N0;
-          P01 := A_ + Radius_ * N1;   P11 := B_ + Radius_ * N1;
+     Result := ( Margin_ / Roo2( S2 ) ) * ( E1 + E2 );
+end;
 
-          Ps_ := Ps_ + [ P00, P10, P11,  P00, P11, P01 ];
-          Ns_ := Ns_ + [ N0 , N0 , N1 ,  N0 , N1 , N1  ];
-     end;
+// 三角形 ( P0_, P1_, P2_ ) の頂点 P0_ のコーナー点。
+function MarginCorner( const P0_,P1_,P2_:TSingle3D; const Margin_:Single ) :TSingle3D; overload;
+begin
+     Result := P0_ + MarginCorner( P1_ - P0_, P2_ - P0_, Margin_ );
+end;
+
+//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CircumOf / VoroVector
+
+// 胞の外心（同次外心の非同次化）。
+function CircumOf( const Cell_:TDelaCell3D ) :TSingle3D;
+var
+   V :TSingle4D;
+begin
+     V := Cell_.Circum;
+
+     Result := TSingle3D.Create( V.X, V.Y, V.Z ) / V.W;
+end;
+
+// 外心 Center_ から面 K_ を貫いて伸びるボロノイ辺のベクトル
+// （有限の隣 → 隣の外心まで。無限遠胞 → 外向きに長さ Ray_ の半直線）。
+function VoroVector( const Cell_:TDelaCell3D; const Center_:TSingle3D; const K_:Byte; const Ray_:Single ) :TSingle3D;
+var
+   N :TDelaCell3D;
+   V :TSingle4D;
+begin
+     N := Cell_.Cell[ K_ ];
+
+     V := N.Circum;
+
+     if N.InfCorn < 0 then Result :=        TSingle3D.Create( V.X, V.Y, V.Z ) / V.W - Center_
+                      else Result := Ray_ * TSingle3D.Create( V.X, V.Y, V.Z ).Unitor;
 end;
 
 //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$【 C L A S S 】
@@ -304,6 +241,18 @@ end;
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaunayLayer
 
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& protected
+
+//////////////////////////////////////////////////////////////// A C C E S S O R
+
+function TDelaunayLayer.GetColor :TAlphaColor;
+begin
+     Result := _Material.Diffuse;
+end;
+
+procedure TDelaunayLayer.SetColor( const Color_:TAlphaColor );
+begin
+     _Material.Diffuse := Color_;  Repaint;
+end;
 
 //////////////////////////////////////////////////////////////////// M E T H O D
 
@@ -337,52 +286,15 @@ begin
      Repaint;
 end;
 
-procedure TDelaunayLayer.MakeLines( const Ps_:array of TSingle3D );
-var
-   N, I :Integer;
-begin
-     N := Length( Ps_ );
-
-     with _Geometry do
-     begin
-          with VertexBuffer do
-          begin
-               Length := N;
-
-               for I := 0 to N-1 do Vertices[ I ] := Ps_[ I ];
-          end;
-
-          with IndexBuffer do
-          begin
-               Length := N;
-
-               for I := 0 to N-1 do Indices[ I ] := I;
-          end;
-     end;
-
-     Repaint;
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TDelaunayLayer.DrawTrias( const Material_:TMaterialSource );
+procedure TDelaunayLayer.Render;
 begin
      if _Geometry.IndexBuffer.Length = 0 then Exit;
 
      Context.SetMatrix( AbsoluteMatrix );
 
-     Context.SetContextState( TContextState.csAllFace );  // 巻き方向に依らず表面が描かれるように（形は閉じているので裏面は隠れる）
+     Context.SetContextState( TContextState.csFrontFace );  // 裏面（光の当たらない面）はカリングで消す。巻き方向は正準順で外向きに揃えてある
 
-     _Geometry.Render( Context, TMaterialSource.ValidMaterial( Material_ ), AbsoluteOpacity );
-end;
-
-procedure TDelaunayLayer.DrawLines( const Material_:TMaterialSource );
-begin
-     if _Geometry.IndexBuffer.Length = 0 then Exit;
-
-     Context.SetMatrix( AbsoluteMatrix );
-
-     Context.DrawLines( _Geometry.VertexBuffer, _Geometry.IndexBuffer, TMaterialSource.ValidMaterial( Material_ ), AbsoluteOpacity );
+     _Geometry.Render( Context, TMaterialSource.ValidMaterial( _Material ), AbsoluteOpacity );
 end;
 
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& public
@@ -394,6 +306,12 @@ begin
      HitTest := False;
 
      _Geometry := TMeshData.Create;
+
+     _Material := TLightMaterialSource.Create( Self );
+
+     _Material.Ambient   := TAlphaColor( $FF202020 );
+     _Material.Specular  := TAlphaColor( $FF303030 );
+     _Material.Shininess := 30;
 end;
 
 destructor TDelaunayLayer.Destroy;
@@ -403,123 +321,15 @@ begin
      inherited;
 end;
 
-//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaunayFillLayer
-
-//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& protected
-
-//////////////////////////////////////////////////////////////// A C C E S S O R
-
-function TDelaunayFillLayer.GetColor :TAlphaColor;
-begin
-     Result := _Material.Diffuse;
-end;
-
-procedure TDelaunayFillLayer.SetColor( const Color_:TAlphaColor );
-begin
-     _Material.Diffuse := Color_;  Repaint;
-end;
-
-//////////////////////////////////////////////////////////////////// M E T H O D
-
-procedure TDelaunayFillLayer.Render;
-begin
-     DrawTrias( _Material );
-end;
-
-//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& public
-
-constructor TDelaunayFillLayer.Create( Owner_:TComponent );
-begin
-     inherited;
-
-     _Material := TLightMaterialSource.Create( Self );
-
-     _Material.Ambient   := TAlphaColor( $FF606060 );
-     _Material.Specular  := TAlphaColor( $FF303030 );
-     _Material.Shininess := 30;
-end;
-
-//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaunayLineLayer
-
-//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& protected
-
-//////////////////////////////////////////////////////////////// A C C E S S O R
-
-function TDelaunayLineLayer.GetColor :TAlphaColor;
-begin
-     Result := _Material.Color;
-end;
-
-procedure TDelaunayLineLayer.SetColor( const Color_:TAlphaColor );
-begin
-     _Material.Color := Color_;  Repaint;
-end;
-
-//////////////////////////////////////////////////////////////////// M E T H O D
-
-procedure TDelaunayLineLayer.Render;
-begin
-     DrawLines( _Material );
-end;
-
-//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& public
-
-constructor TDelaunayLineLayer.Create( Owner_:TComponent );
-begin
-     inherited;
-
-     _Material := TColorMaterialSource.Create( Self );
-end;
-
-//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaunayPoins
-
-//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& private
-
-//////////////////////////////////////////////////////////////// A C C E S S O R
-
-procedure TDelaunayPoins.SetRadius( const Radius_:Single );
-begin
-     _Radius := Radius_;  Repaint;
-end;
-
-//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& public
-
-constructor TDelaunayPoins.Create( Owner_:TComponent );
-begin
-     inherited;
-
-     _Radius := 0.08;
-
-     Color := TAlphaColors.Red;
-end;
-
-//////////////////////////////////////////////////////////////////// M E T H O D
-
-procedure TDelaunayPoins.BuildScene( const Delaunay_:TDelaunay3D );
-var
-   Ps, Ns :TArray<TSingle3D>;
-   P :TDelaPoin3D;
-begin
-     Ps := [];
-     Ns := [];
-
-     if Assigned( Delaunay_ ) then
-     begin
-          for P in Delaunay_.Poins do AddSphere( Ps, Ns, P.Pos, _Radius );
-     end;
-
-     MakeMesh( Ps, Ns );
-end;
-
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaunayEdges
 
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& private
 
 //////////////////////////////////////////////////////////////// A C C E S S O R
 
-procedure TDelaunayEdges.SetRadius( const Radius_:Single );
+procedure TDelaunayEdges.SetMargin( const Margin_:Single );
 begin
-     _Radius := Radius_;  Repaint;
+     _Margin := Margin_;  Repaint;
 end;
 
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& public
@@ -528,9 +338,9 @@ constructor TDelaunayEdges.Create( Owner_:TComponent );
 begin
      inherited;
 
-     _Radius := 0.02;
+     _Margin := 0.05;
 
-     Color := TAlphaColor( $FF505050 );
+     Color := TAlphaColor( $FFF35594 );
 end;
 
 //////////////////////////////////////////////////////////////////// M E T H O D
@@ -539,100 +349,11 @@ procedure TDelaunayEdges.BuildScene( const Delaunay_:TDelaunay3D );
 var
    Ps, Ns :TArray<TSingle3D>;
    C :TDelaCell3D;
-   I, K :Byte;
-   PA, PB :TDelaPoin3D;
-//･･･････････････････････････････････････････
-     function Owned( const C_:TDelaCell3D; const PA_,PB_:TDelaPoin3D ) :Boolean;  // 辺の周りの環で自分が代表（最小番地の胞）か
-     var
-        Cur, Prev, Nxt :TDelaCell3D;
-        K :Byte;
-        N :Integer;
-     begin
-          Result := True;
-
-          Prev := nil;
-          Cur  := C_;
-
-          for N := 1 to 64 do  // 辺を含む面を渡って環を一周する
-          begin
-               Nxt := C_;
-
-               for K := 0 to 3 do
-               begin
-                    if ( Cur.Poin[ K ] = PA_ ) or ( Cur.Poin[ K ] = PB_ ) then Continue;  // 辺を含む面は、辺以外の頂点の対面
-
-                    Nxt := Cur.Cell[ K ];
-
-                    if Nxt <> Prev then Break;
-               end;
-
-               if Nxt = C_ then Exit;  // 一周した
-
-               if NativeUInt( Nxt ) < NativeUInt( C_ ) then Exit( False );  // 自分より若い胞が居る
-
-               Prev := Cur;
-               Cur  := Nxt;
-          end;
-     end;
-//･･･････････････････････････････････････････
-begin
-     Ps := [];
-     Ns := [];
-
-     if Assigned( Delaunay_ ) then
-     begin
-          for C in Delaunay_.Cells do
-          begin
-               for I := 0 to 2 do
-               begin
-                    for K := I+1 to 3 do
-                    begin
-                         PA := C.Poin[ I ];
-                         PB := C.Poin[ K ];
-
-                         if PA.Inf or PB.Inf then Continue;
-
-                         if Owned( C, PA, PB ) then AddTube( Ps, Ns, PA.Pos, PB.Pos, _Radius );
-                    end;
-               end;
-          end;
-     end;
-
-     MakeMesh( Ps, Ns );
-end;
-
-//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaunayCells
-
-//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& private
-
-//////////////////////////////////////////////////////////////// A C C E S S O R
-
-procedure TDelaunayCells.SetShrink( const Shrink_:Single );
-begin
-     _Shrink := Shrink_;  Repaint;
-end;
-
-//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& public
-
-constructor TDelaunayCells.Create( Owner_:TComponent );
-begin
-     inherited;
-
-     _Shrink := 0.5;
-
-     Color := TAlphaColors.Cornflowerblue;
-end;
-
-//////////////////////////////////////////////////////////////////// M E T H O D
-
-procedure TDelaunayCells.BuildScene( const Delaunay_:TDelaunay3D );
-var
-   Ps, Ns :TArray<TSingle3D>;
-   C :TDelaCell3D;
-   G :TSingle3D;
-   Vs :array [ 0..3 ] of TSingle3D;
-   F1, F2, F3, N :TSingle3D;
-   I, K :Byte;
+   K :Byte;
+   P0, P1, P2, P3,
+   C102, C203, C301,
+   C021, C032, C013,
+   C312, C123, C231 :TSingle3D;
 begin
      Ps := [];
      Ns := [];
@@ -643,26 +364,43 @@ begin
           begin
                if C.InfCorn >= 0 then Continue;  // 有限胞のみ
 
-               G := Ave( C.Poin[ 0 ].Pos, C.Poin[ 1 ].Pos, C.Poin[ 2 ].Pos, C.Poin[ 3 ].Pos );
-
-               for I := 0 to 3 do  // 重心座標で補間した Shrink 倍の四面体を胞の中に浮かべる
-               begin
-                    Vs[ I ] := G + _Shrink * ( C.Poin[ I ].Pos - G );
-               end;
-
-               for K := 0 to 3 do  // 面の正準順は外向き。法線はフラット
+               for K := 0 to 3 do
                begin
                     with VertTable[ K ] do
                     begin
-                         F1 := Vs[ _[ 1 ] ];
-                         F2 := Vs[ _[ 2 ] ];
-                         F3 := Vs[ _[ 3 ] ];
+                         P0 := C.Poin[ _[ 0 ] ].Pos;  // 頂点 K
+                         P1 := C.Poin[ _[ 1 ] ].Pos;  // 対面（外向きの正準順）
+                         P2 := C.Poin[ _[ 2 ] ].Pos;
+                         P3 := C.Poin[ _[ 3 ] ].Pos;
                     end;
 
-                    N := CrossProduct( F2 - F1, F3 - F1 ).Unitor;
+                    // 頂点 K を囲む3面のコーナー点（Ciaj = 頂点 a の、辺 ai・aj の間のコーナー）
+                    C102 := MarginCorner( P0, P1, P2, _Margin );
+                    C203 := MarginCorner( P0, P2, P3, _Margin );
+                    C301 := MarginCorner( P0, P3, P1, _Margin );
 
-                    Ps := Ps + [ F1, F2, F3 ];
-                    Ns := Ns + [ N , N , N  ];
+                    C021 := MarginCorner( P2, P0, P1, _Margin );
+                    C032 := MarginCorner( P3, P0, P2, _Margin );
+                    C013 := MarginCorner( P1, P0, P3, _Margin );
+
+                    // 中央の1枚 ＋ 辺 02・03・01 沿いの3枚。対頂点側の反復と合わさって
+                    // 辺を包む管、頂点を囲む殻が閉じる
+                    AddTria( Ps, Ns, C102, C301, C203 );
+
+                    AddTria( Ps, Ns, C021, C102, C203 );
+                    AddTria( Ps, Ns, C032, C203, C301 );
+                    AddTria( Ps, Ns, C013, C301, C102 );
+
+                    if C.Cell[ K ].InfCorn >= 0 then  // 凸包の面は外側の帯で管を閉じる
+                    begin
+                         C312 := MarginCorner( P1, P3, P2, _Margin );
+                         C123 := MarginCorner( P2, P1, P3, _Margin );
+                         C231 := MarginCorner( P3, P2, P1, _Margin );
+
+                         AddTria( Ps, Ns, P2, P1, C312 );  AddTria( Ps, Ns, C312, C123, P2 );
+                         AddTria( Ps, Ns, P3, P2, C123 );  AddTria( Ps, Ns, C123, C231, P3 );
+                         AddTria( Ps, Ns, P1, P3, C231 );  AddTria( Ps, Ns, C231, C312, P1 );
+                    end;
                end;
           end;
      end;
@@ -676,6 +414,11 @@ end;
 
 //////////////////////////////////////////////////////////////// A C C E S S O R
 
+procedure TDelaunayVoros.SetMargin( const Margin_:Single );
+begin
+     _Margin := Margin_;  Repaint;
+end;
+
 procedure TDelaunayVoros.SetRayLength( const RayLength_:Single );
 begin
      _RayLength := RayLength_;  Repaint;
@@ -687,49 +430,91 @@ constructor TDelaunayVoros.Create( Owner_:TComponent );
 begin
      inherited;
 
-     _RayLength := 2;
+     _Margin    := 0.05;
+     _RayLength := 10;
 
-     Color := TAlphaColors.Black;
+     Color := TAlphaColor( $FF1F95FF );
 end;
 
 //////////////////////////////////////////////////////////////////// M E T H O D
 
 procedure TDelaunayVoros.BuildScene( const Delaunay_:TDelaunay3D );
 var
-   Ps :TArray<TSingle3D>;
+   Ps, Ns :TArray<TSingle3D>;
    C, N :TDelaCell3D;
    K :Byte;
-   V :TSingle4D;
-   P0, P1 :TSingle3D;
+   S0, S1,
+   V0, V1, V2, V3,
+   W0, W1, W2, W3,
+   C23, C31, C13,
+   C01, C02, C03,
+   D01, D02, D03 :TSingle3D;
 begin
      Ps := [];
+     Ns := [];
 
      if Assigned( Delaunay_ ) then
      begin
           for C in Delaunay_.Cells do
           begin
-               if C.InfCorn < 0 then  // 有限胞のみ（ボロノイ頂点 = 外心）
+               if C.InfCorn >= 0 then Continue;  // ボロノイ頂点 = 有限胞の外心
+
+               S0 := CircumOf( C );
+
+               for K := 0 to 3 do
                begin
-                    V := C.Circum;
-
-                    P0 := TSingle3D.Create( V.X, V.Y, V.Z ) / V.W;
-
-                    for K := 0 to 3 do
+                    with VertTable[ K ] do
                     begin
-                         N := C.Cell[ K ];
+                         V0 := VoroVector( C, S0, _[ 0 ], _RayLength );  // 面 K を貫く辺
+                         V1 := VoroVector( C, S0, _[ 1 ], _RayLength );  // 残る3本
+                         V2 := VoroVector( C, S0, _[ 2 ], _RayLength );
+                         V3 := VoroVector( C, S0, _[ 3 ], _RayLength );
+                    end;
 
-                         V := N.Circum;
+                    // 辺 V0 を除く3方向の対のコーナー三角形（4枚の反復で外心を囲む殻が閉じる）
+                    C23 := S0 + MarginCorner( V2, V3, _Margin );
+                    C31 := S0 + MarginCorner( V3, V1, _Margin );
+                    C13 := S0 + MarginCorner( V1, V2, _Margin );
 
-                         if N.InfCorn < 0 then P1 := ( P0 + TSingle3D.Create( V.X, V.Y, V.Z ) / V.W ) / 2  // 有限胞 → 中点まで（両側から描いて1本になる）
-                                          else P1 := P0 + _RayLength * TSingle3D.Create( V.X, V.Y, V.Z ).Unitor;  // 無限遠胞 → 外向きの半直線
+                    AddTria( Ps, Ns, C23, C31, C13 );
 
-                         Ps := Ps + [ P0, P1 ];
+                    // 辺 V0 とその他の方向の間のコーナー点（三角柱の口）
+                    C01 := S0 + MarginCorner( V0, V1, _Margin );
+                    C02 := S0 + MarginCorner( V0, V2, _Margin );
+                    C03 := S0 + MarginCorner( V0, V3, _Margin );
+
+                    N := C.Cell[ K ];
+
+                    if N.InfCorn < 0 then  // 有限の隣 → 三角柱の半分（3枚）を渡す。両側から張って柱が閉じる
+                    begin
+                         S1 := CircumOf( N );
+
+                         W0 := VoroVector( N, S1, C.Join[ K, 0 ], _RayLength );  // 隣から見た同じ辺の束
+                         W1 := VoroVector( N, S1, C.Join[ K, 1 ], _RayLength );
+                         W2 := VoroVector( N, S1, C.Join[ K, 2 ], _RayLength );
+                         W3 := VoroVector( N, S1, C.Join[ K, 3 ], _RayLength );
+
+                         D01 := S1 + MarginCorner( W0, W1, _Margin );
+                         D02 := S1 + MarginCorner( W0, W2, _Margin );
+                         D03 := S1 + MarginCorner( W0, W3, _Margin );
+
+                         AddTria( Ps, Ns, D01, C01, C03 );
+                         AddTria( Ps, Ns, D02, C02, C01 );
+                         AddTria( Ps, Ns, D03, C03, C02 );
+                    end
+                    else  // 無限遠胞 → 半直線の先の1点へ錐で閉じる
+                    begin
+                         S1 := S0 + V0;
+
+                         AddTria( Ps, Ns, S1, C01, C03 );
+                         AddTria( Ps, Ns, S1, C02, C01 );
+                         AddTria( Ps, Ns, S1, C03, C02 );
                     end;
                end;
           end;
      end;
 
-     MakeLines( Ps );
+     MakeMesh( Ps, Ns );
 end;
 
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaunayViewport
@@ -805,8 +590,6 @@ end;
 
 procedure TDelaunayViewer.BuildScene;
 begin
-     _Poins.BuildScene( _Delaunay );
-     _Cells.BuildScene( _Delaunay );
      _Edges.BuildScene( _Delaunay );
      _Voros.BuildScene( _Delaunay );
 end;
@@ -823,7 +606,7 @@ begin
      begin
           Parent            := Self;
           Align             := TAlignLayout.Client;
-          Color             := TAlphaColor( $FFF5F5F5 );
+          Color             := TAlphaColor( $FF696969 );  // DimGray
           HitTest           := False;  // マウスはフレーム（自分）が受ける
           UsingDesignCamera := False;
 
@@ -859,10 +642,8 @@ begin
           RotationAngle.Y := +20;
      end;
 
-     _Cells := TDelaunayCells.Create( Self );  _Cells.Parent := _Viewport;  // 生成順は任意（3D は深度で解決される）
+     _Edges := TDelaunayEdges.Create( Self );  _Edges.Parent := _Viewport;  // 生成順は任意（3D は深度で解決される）
      _Voros := TDelaunayVoros.Create( Self );  _Voros.Parent := _Viewport;
-     _Edges := TDelaunayEdges.Create( Self );  _Edges.Parent := _Viewport;
-     _Poins := TDelaunayPoins.Create( Self );  _Poins.Parent := _Viewport;
 end;
 
 destructor TDelaunayViewer.Destroy;
