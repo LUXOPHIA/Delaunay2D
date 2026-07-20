@@ -26,7 +26,7 @@ object Form1: TForm1
     Size.PlatformDefault = False
     StyleLookup = 'pushpanel'
     TabOrder = 1
-    object ButtonR: TButton
+    object ButtonA: TButton
       Margins.Left = 8.00000000000000000
       Margins.Top = 8.00000000000000000
       Margins.Right = 8.00000000000000000
@@ -36,8 +36,8 @@ object Form1: TForm1
       Size.Height = 50.00000000000000000
       Size.PlatformDefault = False
       TabOrder = 1
-      Text = 'Random'
-      OnClick = ButtonRClick
+      Text = 'Add x10'
+      OnClick = ButtonAClick
     end
     object ButtonC: TButton
       Margins.Left = 8.00000000000000000
@@ -51,6 +51,19 @@ object Form1: TForm1
       TabOrder = 0
       Text = 'Clear'
       OnClick = ButtonCClick
+    end
+    object ButtonD: TButton
+      Margins.Left = 8.00000000000000000
+      Margins.Top = 8.00000000000000000
+      Margins.Right = 8.00000000000000000
+      Position.X = 10.00000000000000000
+      Position.Y = 130.00000000000000000
+      Size.Width = 100.00000000000000000
+      Size.Height = 50.00000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 2
+      Text = 'Del x10'
+      OnClick = ButtonDClick
     end
   end
 end
