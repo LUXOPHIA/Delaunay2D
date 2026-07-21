@@ -6,7 +6,7 @@
 
 クリックで点を追加・削除すると、ドロネー三角形分割・外接円・ボロノイ図がリアルタイムに更新されます。[LUX.Delaunay](https://github.com/LUXOPHIA/LUX.Delaunay) ライブラリの上に作られています。
 
-- 逐次的な **追加**（Bowyer–Watson 法）と **削除**（フリップ法）— どの操作の後も図は常にドロネーです。
+- 逐次的な **追加**（Bowyer–Watson 法）と **削除**（星の除去と、リンクの小さなドロネー図による決定論的な埋め戻し）— どの操作の後も図は常にドロネーで、退化した入力には `AddPoin` が `nil` を、`DeletePoin` が `False` を返します。
 - **無限遠頂点方式** — スーパートライアングルもバウンディングボックスも不要で、凸包上の点も内部の点と同じように扱えます。
 - 描画はライブラリの `TDelaunayViewer` フレーム（Skia シーングラフ）が担い、アプリケーション自体は描画コードを持ちません。
 
@@ -28,6 +28,7 @@ _LIBRARY\LUXOPHIA\
   LUX.Delaunay\                         … ドロネー図ライブラリ（git subtree）
     D2\LUX.Delaunay.D2.pas              …   2D ドロネー図（TDelaunay2D）
     D2\LUX.Delaunay.D2.Viewer.pas/.fmx  …   2D ビューアフレーム（TDelaunayViewer）
+    D3\…                                …   3D 版ユニット（サブツリーに同居。このサンプルでは未使用）
   LUX.CG2D\                             … Skia ベースの 2D シーングラフ（git subtree）
   LUX\                                  … 基盤ライブラリ（git subtree）
 ```

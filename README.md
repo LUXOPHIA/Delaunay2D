@@ -6,7 +6,7 @@
 
 Click to add and remove points; the Delaunay triangulation, the circumcircles, and the Voronoi diagram update live. Built on the [LUX.Delaunay](https://github.com/LUXOPHIA/LUX.Delaunay) library:
 
-- Incremental **insertion** (Bowyer–Watson) and **deletion** (flip-based) — the diagram stays Delaunay after every operation.
+- Incremental **insertion** (Bowyer–Watson) and **deletion** (star removal with a deterministic refill from a small Delaunay diagram of the link) — the diagram stays Delaunay after every operation; on degenerate input `AddPoin` returns `nil` and `DeletePoin` returns `False`.
 - **Infinite-vertex method** — no super-triangle, no bounding box; hull points behave like interior points.
 - Rendering by the library's `TDelaunayViewer` frame (Skia scene graph); the application itself contains no drawing code.
 
@@ -28,6 +28,7 @@ _LIBRARY\LUXOPHIA\
   LUX.Delaunay\                         … Delaunay library         (git subtree)
     D2\LUX.Delaunay.D2.pas              …   2D diagram (TDelaunay2D)
     D2\LUX.Delaunay.D2.Viewer.pas/.fmx  …   2D viewer frame (TDelaunayViewer)
+    D3\…                                …   3D units (bundled with the subtree; unused by this sample)
   LUX.CG2D\                             … 2D scene graph on Skia   (git subtree)
   LUX\                                  … base library             (git subtree)
 ```
