@@ -101,10 +101,9 @@ var
 begin
      P := Viewer1.ScrToPos( TPointF.Create( X, Y ) );
 
-     V := _Delaunay.FindPoin( P, 6 );
-
-     if Assigned( V ) then _Delaunay.DeletePoin( V )   // 既存点 → 削除
-                      else _Delaunay.AddPoin   ( P );  // 空白　 → 追加
+     if _Delaunay.FindNearPoin( P, V ) < 6
+     then _Delaunay.DeletePoin( V )   // 近くに既存点 → 削除
+     else _Delaunay.AddPoin   ( P );  // 空白　　　　 → 追加
 end;
 
 //------------------------------------------------------------------------------
