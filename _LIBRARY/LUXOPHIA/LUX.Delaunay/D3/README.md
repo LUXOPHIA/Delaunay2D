@@ -54,9 +54,9 @@ Iterable containers (`for C in …`, `Count`, `[I]`). `TDelaCellSet3D.Poins` exp
 | `Poins :TDelaPoinSet3D` | All finite vertices. |
 | `OnChange :TDelegates` | Multicast notification, fired after every structural change. Subscribe with `Add`, unsubscribe with `Del`. |
 | `HitSphereCell( Pos_ ) :TDelaCell3D` | A cell whose circumsphere contains `Pos_` — jump & walk, expected O(n^1/4). |
-| `FindPoin( Pos_, Radius_ ) :TDelaPoin3D` | Nearest vertex within `Radius_`, or `nil`. |
-| `AddPoin( Pos_ ) :TDelaPoin3D` | Insert a point (Bowyer–Watson). Overload `AddPoin( Pos_, Cell_ )` skips the search when a containing cell is already known. |
-| `DeletePoin( Poin_ ) :Boolean` | Remove a vertex (flip-based, see below). `False` for invalid input (`nil`, the point at infinity, or a vertex of another diagram). |
+| `FindNearPoin( Pos_, out Poin_ ) :Single` | The nearest vertex and the distance to it (locate + greedy descent). `Poin_ = nil` and `Infinity` when the diagram is empty. |
+| `AddPoin( Pos_ ) :TDelaPoin3D` | Insert a point (Bowyer–Watson), or `nil` when it cannot be inserted (duplicate, a 3rd point collinear with the first two, or a degenerate position). Overload `AddPoin( Pos_, Cell_ )` skips the search when a containing cell is already known. |
+| `DeletePoin( Poin_ ) :Boolean` | Remove a vertex — its star is deleted and the hole is refilled deterministically from a small Delaunay diagram of the link (see below). `False`, with nothing modified, for invalid input or a degenerate configuration that cannot be refilled. |
 | `Clear` | Remove all points and cells (`PoinInf` survives). |
 
 ---
@@ -122,9 +122,8 @@ begin
           if C.InfCorn < 0 then { C.Poin[0..3] span a finite tetrahedron };
      end;
 
-     P := D.FindPoin( TSingle3D.Create( 0, 0, 0 ), 1 );      // nearest vertex within 1
-
-     if Assigned( P ) then D.DeletePoin( P );                // delete
+     if D.FindNearPoin( TSingle3D.Create( 0, 0, 0 ), P ) < 1  // nearest vertex and its distance
+     then D.DeletePoin( P );                                  // delete
 
      D.Free;
 end;
@@ -214,7 +213,7 @@ A complete interactive application is available at [Delaunay3D](https://github.c
 ## Algorithm notes
 
 - **Insertion** is Bowyer–Watson: the cells whose circumspheres contain the new point (the cavity) are removed by a recursive walk and the boundary faces are re-spanned to the new point. In 3D the cavity's dual is not a tree — the recursion may re-enter a removed cell — so temporary placeholder cells act as mailboxes for the pending gluings; they all vanish when the recursion ends.
-- **Deletion** is flip-based: ears of the vertex's star are validated against the *original* link ("the ear's sphere contains the vertex and no other link vertex" — i.e. the ear is a cell of the final form) and committed by 2-3 / 3-2 flips, with a combinatorial ring priority near the hull and 2-0 flips for the zero-volume pocket pairs that arise there; when the star has shrunk to four cells they collapse into one. Degenerate configurations that cannot be flipped down (a few percent) are resolved by rebuilding the cells while keeping every point instance, so deletion always leaves a valid Delaunay diagram.
+- **Deletion** removes the vertex star, which opens a star-shaped hole, and refills it deterministically: a small Delaunay diagram of just the link vertices is built by incremental insertion as an independent component inside the same cell set (no nested `TDelaunay3D`), the cells that fill the hole are cut out of it — the cells whose faces match the hole boundary in mirror orientation (`CanWeld`), plus everything reachable from them without crossing the boundary — and sewn onto the rim (`Weld`). Every step is a combinatorial check with no flip search; if any check fails on a degenerate configuration, the original diagram is left untouched and `DeletePoin` returns `False`.
 - **Predicates**: a single lift determinant decides in-sphere, orientation, and the walk direction; operands are translated to a nearby base point and evaluated in double precision.
 
 ## License

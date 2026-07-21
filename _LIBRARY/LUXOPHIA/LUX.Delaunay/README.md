@@ -7,7 +7,7 @@
 ## Features
 
 - **2D and 3D** — `D2/` builds Delaunay triangulations on a winged triangle mesh (TriFlip), `D3/` builds Delaunay tetrahedralizations on a flip-based tetrahedral mesh (TetraFlip).
-- **Fully dynamic** — points can be added (Bowyer–Watson) and removed (flip-based deletion) at any time. The structure is a valid Delaunay diagram after every operation.
+- **Fully dynamic** — points can be added (Bowyer–Watson) and removed at any time. Removal deletes the vertex star and refills the hole deterministically: a small Delaunay diagram of the link vertices is built inside the same set and sewn into the boundary — no flip search. The structure is a valid Delaunay diagram after every operation; on degenerate input, `AddPoin` returns `nil` and `DeletePoin` returns `False` without touching anything.
 - **Infinite vertex, no super-simplex** — the outside of the convex hull is covered by cells that share a single point at infinity. There is no bounding box to size and no coordinate limit to respect, and hull points are inserted and deleted by the same code path as interior points.
 - **Unified predicates** — the in-circle / in-sphere test is a single lift determinant. The point at infinity substitutes its own lift by polymorphism, so finite points and the infinite point, spheres and planes (spheres of infinite radius) all flow through one expression with no case analysis. Every determinant is evaluated in double precision after translating the operands to a nearby base point, so the predicates stay reliable far from the origin.
 - **Homogeneous circumcenters** — `Circum` returns the circumcenter in homogeneous coordinates. For cells at infinity it degenerates naturally to `W = 0`, where `(X, Y[, Z])` is the outward direction of the unbounded Voronoi edge. The entire Voronoi diagram, rays included, falls out of one formula with no branches and no divisions.
@@ -53,9 +53,8 @@ begin
 
      for N := 1 to 100 do D.AddPoin( 100 * TSingle2D.RandG );  // insert points
 
-     P := D.FindPoin( TSingle2D.Create( 0, 0 ), 10 );          // nearest point within radius 10
-
-     if Assigned( P ) then D.DeletePoin( P );                  // delete it
+     if D.FindNearPoin( TSingle2D.Create( 0, 0 ), P ) < 10     // nearest point and its distance
+     then D.DeletePoin( P );                                   // delete it
 
      for F in D.Faces do                                       // enumerate triangles
      begin
@@ -81,9 +80,8 @@ begin
 
      for N := 1 to 100 do D.AddPoin( TSingle3D.RandG );  // insert points
 
-     P := D.FindPoin( TSingle3D.Create( 0, 0, 0 ), 1 );  // nearest point within radius 1
-
-     if Assigned( P ) then D.DeletePoin( P );            // delete it
+     if D.FindNearPoin( TSingle3D.Create( 0, 0, 0 ), P ) < 1  // nearest point and its distance
+     then D.DeletePoin( P );                                  // delete it
 
      for C in D.Cells do                                 // enumerate tetrahedra
      begin
