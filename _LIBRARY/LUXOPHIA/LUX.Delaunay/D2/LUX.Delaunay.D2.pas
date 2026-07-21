@@ -24,21 +24,25 @@
 //   の3行を並べた 3×3 行列式が正なら「円の内側」。無限遠頂点を含む面では
 //   この式が自動的に半平面判定（orient2d）へ退化する。円と直線（＝半径無限大の
 //   円）がリフト空間では同じ「平面」になることの帰結であり、場合分けは要らない。
+//   行列式は必ず近傍の点を基準に平行移動してから倍精度で評価する（桁落ち対策。
+//   外心も同様で、絶対座標のまま評価する式は存在しない）。
 // ・点の追加は Bowyer-Watson 法。新しい点を円に含む面群（キャビティ）を
 //   FaceTree で再帰的に削除し、境界辺ごとに新しい面を張り直す。
 //   キャビティの内部に頂点が存在しないため、その双対グラフは木になり、
 //   一度の再帰で削除・生成・縫合が完了する。
-// ・点の削除はフリップ法。耳の底辺（頂点と耳先を結ぶ辺）を FlipEdge で外して次数を
-//   下げていき、次数3になったら3面を1面に畳み込んで頂点を取り除く。穴を開けない
-//   ため途中状態が常に正しい三角形分割であり、リングの配列管理も要らない。
-//   耳が有効である条件は「自分が耳の外接円の内側にあり、円が他のリング頂点を
-//   含まない」。これは最終形に現れる面そのものなので、選択の優先順位は要らず、
-//   最初に見つけた有効な耳を切ればよい。
+// ・点の削除は「星の除去と埋め戻し」。頂点の星（頂点を含む面の集合）を取り除くと
+//   星型の穴が開く。穴の境界（リンク）の頂点だけから成る小さなドロネー図を、同じ
+//   集合の中の独立した成分として逐次添加法で作り（入れ子の TDelaunay2D は作らない）、
+//   その中から穴を埋める面 ―― 境界辺を同じ向きで含む面から、境界を越えずに届く面 ――
+//   を切り出して、穴の縁に縫い付ける。埋め草の切り出しも縫い付けも組合せ的な検査だけで
+//   確定し、フリップの探索を含まない。検査に通らない退化配置では、元の分割を一切壊さずに
+//   False を返す。
+// ・追加も削除も、失敗は戻り値で表す。AddPoin は追加できなければ nil を、DeletePoin は
+//   削除できなければ False を返し、分割は常に正しいまま保たれる。遅延挿入のような
+//   救済機構は持たない。
 // ・無限遠頂点は TDelaPoin2DInf として派生し、リフト（Lift = 0,0,1）と内外判定
 //   （InCircled = 向きの行列式）を多態で差し替える。有限点と無限遠点、有限半径の
 //   円と直線（無限半径の円）は同じ式で扱われ、述語にフラグの分岐は存在しない。
-//   リング走査でも、自分自身や無限遠点との判定は行列式が 0 以下となって自然に
-//   除外されるため、スキップの条件分岐も無い。
 // ・面の外心は同次座標 Circum = ( X, Y, W ) で取り出す。リフト空間で3頂点を通る
 //   平面の係数（小行列式）そのものであり、有限面は ( X/W, Y/W ) が外心、無限遠面は
 //   自然に W = 0 へ退化して ( X, Y ) がボロノイ辺の外向きの方向を表す。
@@ -47,8 +51,11 @@
 //   引き、最も近い点のアンカー面から、追加点が外側にある辺を越えて隣へ渡り続ける
 //   （期待 O(n^(1/3))）。辺の向き判定は統一述語の退化形 InCircle( A, B, ∞, P ) で
 //   あり、凸包外の点では歩行が自然に無限遠面へ入って止まる。標本は毎回引き直す
-//   ため、性能はクエリの履歴や位置に依らず領域全体で一様。最近傍検索（FindPoin）
-//   も同じ標本から出発し、ドロネー辺を伝う最近傍への貪欲降下で行う。
+//   ため、性能はクエリの履歴や位置に依らず領域全体で一様。
+// ・最近傍検索（FindNearPoin）もジャンプ＆ウォークの着地面から始める。Pos_ を空円に
+//   含む面の頂点は Pos_ の近くにいるので、その中の最も近い頂点から、ドロネー辺を
+//   伝ってより近い隣接頂点へ降下する。移るたびに距離が厳密に縮むため、Pos_ を
+//   ボロノイ領域に含む点 ＝ 最近傍点で必ず停止する（期待 O(n^(1/3)) ＋ O(1) 段の降下）。
 
 interface //#################################################################### ■
 
@@ -96,8 +103,8 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
        ///// P R O P E R T Y
        property Inf :Boolean read GetInf;  // 無限遠頂点か
        ///// M E T H O D
-       function Lift( const Pos_:TSingle2D ) :TSingle3D; virtual;  // Pos_ を原点とするリフト座標 ( X, Y, X²+Y² )
-       function InCircled( const P1_,P2_,P3_:TDelaPoin2D ) :Single; virtual;  // 円 ( P1, P2, P3 ) に対する自分の内外（正 = 内側）
+       function Lift( const Pos_:TSingle2D ) :TDouble3D; virtual;  // Pos_ を原点とするリフト座標 ( X, Y, X²+Y² )
+       function InCircled( const P1_,P2_,P3_:TDelaPoin2D ) :Double; virtual;  // 円 ( P1, P2, P3 ) に対する自分の内外（正 = 内側）
      end;
 
      //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaPoin2DInf
@@ -112,8 +119,8 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
        function LiftW :Single; override;  // 同次成分（無限遠点 = 0）
      public
        ///// M E T H O D
-       function Lift( const Pos_:TSingle2D ) :TSingle3D; override;  // どこから見ても ( 0, 0, 1 )
-       function InCircled( const P1_,P2_,P3_:TDelaPoin2D ) :Single; override;  // 円の向き（直線への退化）で決まる
+       function Lift( const Pos_:TSingle2D ) :TDouble3D; override;  // どこから見ても ( 0, 0, 1 )
+       function InCircled( const P1_,P2_,P3_:TDelaPoin2D ) :Double; override;  // 円の向き（直線への退化）で決まる
      end;
 
      //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaPoinSet2D
@@ -139,7 +146,7 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
        property InfCorn :Byte      read GetInfCorn;  // 無限遠頂点の番号（0 = 有限面）
        property Circum  :TSingle3D read GetCircum ;  // 同次外心 ( X, Y, W )。有限面は ( X/W, Y/W ) が外心、無限遠面は W = 0 で ( X, Y ) が外向きの方向
        ///// M E T H O D
-       class function InCircle( const P1_,P2_,P3_:TDelaPoin2D; const Pos_:TSingle2D ) :Single;  // 統一リフト行列式（正 = 円の内側）
+       class function InCircle( const P1_,P2_,P3_:TDelaPoin2D; const Pos_:TSingle2D ) :Double;  // 統一リフト行列式（正 = 円の内側）
        function IsHitCircle( const Pos_:TSingle2D ) :Boolean;
      end;
 
@@ -165,6 +172,7 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
        ///// A C C E S S O R
        function GetFaces :TDelaFaceSet2D;
        ///// M E T H O D
+       function SeedFace( const P1_,P2_:TDelaPoin2D ) :TDelaFace2D;
        procedure InitFace;
        function FaceTree( const Poin_:TDelaPoin2D; const Face_:TDelaFace2D; const Vert_:Byte ) :TFaceJoint;
        procedure Connect( const J_,JL_,JR_:TFaceJoint );
@@ -184,16 +192,18 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
        property OnChange :TDelegates     read _OnChange;  // 構造が変化したときに発火（Add / Del で多播購読）
        ///// M E T H O D
        function HitCircleFace( const Pos_:TSingle2D ) :TDelaFace2D;  // Pos_ を空円に含む面（ジャンプ＆ウォーク・期待 O(n^(1/3))）
-       function FindPoin( const Pos_:TSingle2D; const Radius_:Single ) :TDelaPoin2D;  // Pos_ の最近傍点（Radius_ 内に無ければ nil）
-       function AddPoin( const Pos_:TSingle2D ) :TDelaPoin2D; overload;
+       function FindNearPoin( const Pos_:TSingle2D; out Poin_:TDelaPoin2D ) :Single;  // Pos_ の最近傍点と、そこまでの距離（点が無ければ nil と Infinity）
+       function AddPoin( const Pos_:TSingle2D ) :TDelaPoin2D; overload;     // 点の追加（退化配置で追加できなければ nil）
        function AddPoin( const Pos_:TSingle2D; const Face_:TDelaFace2D ) :TDelaPoin2D; overload;
-       function DeletePoin( const Poin_:TDelaPoin2D ) :Boolean;
+       function DeletePoin( const Poin_:TDelaPoin2D ) :Boolean;             // 点の削除（退化配置で埋め戻せなければ、何も変えずに False）
        procedure Clear; reintroduce;  // 点と面を全消去する（PoinInf は残る）
      end;
 
 //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$【 R O U T I N E 】
 
 implementation //############################################################### ■
+
+uses System.Math;
 
 //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$【 R E C O R D 】
 
@@ -227,17 +237,18 @@ end;
 
 //////////////////////////////////////////////////////////////////// M E T H O D
 
-function TDelaPoin2D.Lift( const Pos_:TSingle2D ) :TSingle3D;
+function TDelaPoin2D.Lift( const Pos_:TSingle2D ) :TDouble3D;
 begin
      with Result do
      begin
-          X := Pos.X - Pos_.X;
-          Y := Pos.Y - Pos_.Y;
+          X := Pos.X;  X := X - Pos_.X;  // 差は Single の値を倍精度で取る（正確）
+          Y := Pos.Y;  Y := Y - Pos_.Y;
+
           Z := X * X + Y * Y;
      end;
 end;
 
-function TDelaPoin2D.InCircled( const P1_,P2_,P3_:TDelaPoin2D ) :Single;
+function TDelaPoin2D.InCircled( const P1_,P2_,P3_:TDelaPoin2D ) :Double;
 begin
      Result := TDelaFace2D.InCircle( P1_, P2_, P3_, Pos );
 end;
@@ -264,7 +275,7 @@ end;
 
 //////////////////////////////////////////////////////////////////// M E T H O D
 
-function TDelaPoin2DInf.Lift( const Pos_:TSingle2D ) :TSingle3D;
+function TDelaPoin2DInf.Lift( const Pos_:TSingle2D ) :TDouble3D;
 begin
      with Result do
      begin
@@ -274,19 +285,27 @@ begin
      end;
 end;
 
-function TDelaPoin2DInf.InCircled( const P1_,P2_,P3_:TDelaPoin2D ) :Single;
+function TDelaPoin2DInf.InCircled( const P1_,P2_,P3_:TDelaPoin2D ) :Double;
+var
+   B :TSingle2D;
 //･･･････････････････････････････････････････
-     function Homo( const P_:TDelaPoin2D ) :TSingle3D;  // 同次座標 ( X, Y, W )。無限遠点は ( 0, 0, 0 ) となり行列式から自然に消える
-     begin
+     function Homo( const P_:TDelaPoin2D ) :TDouble3D;  // 基準点 B へ平行移動した同次座標 ( X - W·Bx, Y - W·By, W )。
+     begin                                              // 無限遠点は ( 0, 0, 0 ) となり行列式から自然に消える
           with Result do
           begin
-               X := P_.Pos.X;
-               Y := P_.Pos.Y;
                Z := P_.LiftW;
+
+               X := P_.Pos.X;  X := X - Z * B.X;
+               Y := P_.Pos.Y;  Y := Y - Z * B.Y;
           end;
      end;
 //･･･････････････････････････････････････････
 begin
+     if not P1_.Inf then B := P1_.Pos  // 桁落ちを防ぐため、有限の頂点を基準に平行移動して評価する（行列式は不変）
+                    else
+     if not P2_.Inf then B := P2_.Pos
+                    else B := P3_.Pos;
+
      // 無限遠点が円の内側にあるのは、円が負の向きのときだけ（正の向きの円は必ず無限遠点を外に置く）
      Result := - DotProduct( Homo( P1_ ), CrossProduct( Homo( P2_ ), Homo( P3_ ) ) );
 end;
@@ -315,27 +334,37 @@ end;
 
 function TDelaFace2D.GetCircum :TSingle3D;
 //･･･････････････････････････････････････････
-     function Minor( const X1_,Y1_,W1_,X2_,Y2_,W2_,X3_,Y3_,W3_:Single ) :Single;
+     function Minor( const X1_,Y1_,W1_,X2_,Y2_,W2_,X3_,Y3_,W3_:Double ) :Double;
      begin
-          Result := DotProduct( TSingle3D.Create( X1_, Y1_, W1_ ),
-              CrossProduct( TSingle3D.Create( X2_, Y2_, W2_ ),
-                            TSingle3D.Create( X3_, Y3_, W3_ ) ) );
+          Result := DotProduct( TDouble3D.Create( X1_, Y1_, W1_ ),
+              CrossProduct( TDouble3D.Create( X2_, Y2_, W2_ ),
+                            TDouble3D.Create( X3_, Y3_, W3_ ) ) );
      end;
 //･･･････････････････････････････････････････
 var
-   L1, L2, L3 :TSingle3D;
-   W1, W2, W3 :Single;
+   B :TSingle2D;
+   L1, L2, L3 :TDouble3D;
+   W1, W2, W3 :Double;
+   CX, CY, CW :Double;
 begin
-     // リフト空間で3頂点を通る平面の係数（小行列式）。無限遠頂点の行は 0 となり、自然に W = 0（直線）へ退化する
-     L1 := Poin[ 1 ].Lift( TSingle2D.Create( 0, 0 ) );  W1 := Poin[ 1 ].LiftW;
-     L2 := Poin[ 2 ].Lift( TSingle2D.Create( 0, 0 ) );  W2 := Poin[ 2 ].LiftW;
-     L3 := Poin[ 3 ].Lift( TSingle2D.Create( 0, 0 ) );  W3 := Poin[ 3 ].LiftW;
+     // リフト空間で3頂点を通る平面の係数（小行列式）。無限遠頂点の行は 0 となり、自然に W = 0（直線）へ退化する。
+     // 桁落ちを防ぐため有限の頂点を基準に平行移動して評価し、最後に基準ぶんを同次で戻す
+     if InfCorn <> 1 then B := Poin[ 1 ].Pos
+                     else B := Poin[ 2 ].Pos;
+
+     L1 := Poin[ 1 ].Lift( B );  W1 := Poin[ 1 ].LiftW;
+     L2 := Poin[ 2 ].Lift( B );  W2 := Poin[ 2 ].LiftW;
+     L3 := Poin[ 3 ].Lift( B );  W3 := Poin[ 3 ].LiftW;
+
+     CX :=   - Minor( L1.Y, L1.Z, W1,  L2.Y, L2.Z, W2,  L3.Y, L3.Z, W3 );
+     CY :=   + Minor( L1.X, L1.Z, W1,  L2.X, L2.Z, W2,  L3.X, L3.Z, W3 );
+     CW := 2 * Minor( L1.X, L1.Y, W1,  L2.X, L2.Y, W2,  L3.X, L3.Y, W3 );
 
      with Result do
      begin
-          X :=   - Minor( L1.Y, L1.Z, W1,  L2.Y, L2.Z, W2,  L3.Y, L3.Z, W3 );
-          Y :=   + Minor( L1.X, L1.Z, W1,  L2.X, L2.Z, W2,  L3.X, L3.Z, W3 );
-          Z := 2 * Minor( L1.X, L1.Y, W1,  L2.X, L2.Y, W2,  L3.X, L3.Y, W3 );
+          X := CX + CW * B.X;  // 有限面は外心が B ぶん戻り、無限遠面（ W = 0 ）は方向がそのまま残る
+          Y := CY + CW * B.Y;
+          Z := CW;
      end;
 end;
 
@@ -343,7 +372,7 @@ end;
 
 //////////////////////////////////////////////////////////////////// M E T H O D
 
-class function TDelaFace2D.InCircle( const P1_,P2_,P3_:TDelaPoin2D; const Pos_:TSingle2D ) :Single;
+class function TDelaFace2D.InCircle( const P1_,P2_,P3_:TDelaPoin2D; const Pos_:TSingle2D ) :Double;
 begin
      Result := DotProduct( P1_.Lift( Pos_ ), CrossProduct( P2_.Lift( Pos_ ), P3_.Lift( Pos_ ) ) );
 end;
@@ -379,16 +408,12 @@ end;
 
 //////////////////////////////////////////////////////////////////// M E T H O D
 
-procedure TDelaunay2D.InitFace;
+function TDelaunay2D.SeedFace( const P1_,P2_:TDelaPoin2D ) :TDelaFace2D;
 var
-   P1, P2 :TDelaPoin2D;
    C1, C2 :TDelaFace2D;
 begin
-     P1 := Poins[ 0 ];
-     P2 := Poins[ 1 ];
-
-     C1 := NewFace( _PoinInf, P1, P2 );
-     C2 := NewFace( _PoinInf, P2, P1 );
+     C1 := NewFace( _PoinInf, P1_, P2_ );  // 2点を通る直線の両側を覆う鏡像の無限遠面（任意の2点が種になる）
+     C2 := NewFace( _PoinInf, P2_, P1_ );
 
      C1.Face[ 1 ] := C2;  C1.Corn[ 1 ] := 1;
      C1.Face[ 2 ] := C2;  C1.Corn[ 2 ] := 3;
@@ -397,6 +422,13 @@ begin
      C2.Face[ 1 ] := C1;  C2.Corn[ 1 ] := 1;
      C2.Face[ 2 ] := C1;  C2.Corn[ 2 ] := 3;
      C2.Face[ 3 ] := C1;  C2.Corn[ 3 ] := 2;
+
+     Result := C1;
+end;
+
+procedure TDelaunay2D.InitFace;
+begin
+     SeedFace( Poins[ 0 ], Poins[ 1 ] );
 end;
 
 //------------------------------------------------------------------------------
@@ -569,9 +601,11 @@ var
    N, O, I :Integer;
    E, K :Byte;
 begin
+     if Poins.ChildrsN = 0 then Exit( nil );  // 点が無ければ面も無い
+
      F := JumpPoin( Pos_ ).Face;  // ジャンプ：無作為標本の最近点のアンカー面から出発する
 
-     if not Assigned( F ) then Exit( ScanCircleFace( Pos_ ) );
+     if not Assigned( F ) then Exit( ScanCircleFace( Pos_ ) );  // 面がまだ無い（点が1つだけ）
 
      for N := 1 to 4 * ChildrsN + 8 do  // ウォーク：Pos_ が外側にある辺を越えて隣へ渡り続ける（面数程度で必ず着く）
      begin
@@ -617,16 +651,20 @@ var
 begin
      case Poins.ChildrsN of
        0: begin
+               if Distance2( Pos_, Pos_ ) <> 0 then Exit( nil );  // 座標が数でない（NaN・∞）
+
                Result := NewPoin( Pos_ );  _OnChange.Run( Self );
           end;
        1: begin
+               if not ( Distance2( Pos_, Poins[ 0 ].Pos ) > 0 ) then Exit( nil );  // 重複（NaN も含めて、離れていると言えなければ弾く）
+
                Result := NewPoin( Pos_ );  InitFace;  _OnChange.Run( Self );
           end;
      else
           F := HitCircleFace( Pos_ );
 
           if Assigned( F ) then Result := AddPoin( Pos_, F )
-                           else Result := nil;  // 退化配置（既存の辺と一直線上）は無視する
+                           else Result := nil;  // 退化配置（重複・既存の稜線の延長上）は追加できない
      end;
 end;
 
@@ -637,7 +675,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-function TDelaunay2D.FindPoin( const Pos_:TSingle2D; const Radius_:Single ) :TDelaPoin2D;
+function TDelaunay2D.FindNearPoin( const Pos_:TSingle2D; out Poin_:TDelaPoin2D ) :Single;
 var
    P :TDelaPoin2D;
    Dm :Single;
@@ -653,7 +691,7 @@ var
 
           F0 := P.Face;
 
-          if not Assigned( F0 ) then Exit;
+          if not Assigned( F0 ) then Exit;  // 面がまだ無い（点が1つだけ）
 
           F := F0;
           C := P.Corn;
@@ -675,133 +713,287 @@ var
      end;
 //･･･････････････････････････････････････････
 var
-   N :Integer;
+   F :TDelaFace2D;
+   I :Byte;
+   W :TDelaPoin2D;
+   D :Single;
 begin
-     Result := nil;
+     Poin_ := nil;  Result := Infinity;
 
      if Poins.ChildrsN = 0 then Exit;
 
-     P := JumpPoin( Pos_ );  Dm := Distance2( Pos_, P.Pos );  // 無作為標本の最近点から出発し、
+     F := HitCircleFace( Pos_ );  // ジャンプ＆ウォークで Pos_ を空円に含む面へ直行し、その面の最も近い頂点から出発する
 
-     for N := 1 to Poins.ChildrsN do  // ドロネー辺を伝って近い方へ降下する。移るたびに距離が縮むので移動は
-     begin                            // 高々 n-1 回であり、Pos_ をボロノイ領域に含む点 ＝ 最近傍点で必ず停止する
-          if not GoNear then Break;
+     P := nil;
+
+     if Assigned( F ) then
+     begin
+          for I := 1 to 3 do
+          begin
+               W := F.Poin[ I ];
+
+               if W.Inf then Continue;
+
+               D := Distance2( Pos_, W.Pos );
+
+               if ( P = nil ) or ( D < Dm ) then begin  P := W;  Dm := D;  end;
+          end;
      end;
 
-     if Dm < Pow2( Radius_ ) then Result := P;
+     if P = nil then P := JumpPoin( Pos_ );  // 面が定まらない退化（既存頂点との一致・面が無い少数点）は無作為標本から
+
+     Dm := Distance2( Pos_, P.Pos );  // ドロネー辺を伝ってより近い隣接頂点へ降下する。移るたびに
+                                      // 距離が厳密に縮むので、Pos_ をボロノイ領域に含む点 ＝
+     while GoNear do ;                // 最近傍点で必ず停止する
+
+     Poin_ := P;  Result := Roo2( Dm );
 end;
 
 //------------------------------------------------------------------------------
 
 function TDelaunay2D.DeletePoin( const Poin_:TDelaPoin2D ) :Boolean;
+type
+    TBond = record            // 穴の境界辺（PA → PB・穴は左側）と、その外側の面（フック）・内側の埋め草
+      PA, PB :TDelaPoin2D;
+      HF :TDelaFace2D;  HC :Byte;
+      FF :TDelaFace2D;  FC :Byte;
+    end;
 var
-   F0 :TDelaFace2D;    C0 :Byte;  // Poin_ の現在位置（面と、その中の角番号）
+   Star  :TArray<TDelaFace2D>;   // Poin_ の星（Poin_ を含む面。取り除くと星型の穴が開く）
+   Bonds :TArray<TBond>;         // 穴の境界（星の面ごとに、Poin_ の対辺が1本）
+   Links :TArray<TDelaPoin2D>;   // 有限のリンク頂点（重複なし）
+   Minis :TArray<TDelaFace2D>;   // リンク頂点だけの小さなドロネー図（同じ集合の中の独立した成分）
+   Fills :TArray<TDelaFace2D>;   // Minis のうち、穴を埋める面
+   Hull  :Boolean;               // 穴が凸包に接しているか（リンクに無限遠頂点が現れるか）
+   AF :TDelaFace2D;    AC :Byte; // 無限遠頂点のアンカーの控え
+   F :TDelaFace2D;
+   I :Integer;
 //･･･････････････････････････････････････････
-     procedure GoNext;  // Poin_ の周りを1面ぶん回る
+     function Has( const Fs_:TArray<TDelaFace2D>; const F_:TDelaFace2D ) :Boolean;
      var
-        R :Byte;
+        I :Integer;
      begin
-          R := VertTableInc[ C0 ].R;
+          for I := 0 to High( Fs_ ) do if Fs_[ I ] = F_ then Exit( True );
 
-          C0 := VertTableInc[ F0.Corn[ R ] ].R;
-          F0 :=               F0.Face[ R ]    ;
+          Result := False;
      end;
 //･･･････････････････････････････････････････
-     function Degree :Integer;  // Poin_ の周囲の面数
+     function IsSeam( const F_:TDelaFace2D; const C_:Byte ) :Boolean;  // 面のこの辺は縫い目（境界辺の内側）か
+     var
+        I :Integer;
+     begin
+          for I := 0 to High( Bonds ) do with Bonds[ I ] do if ( FF = F_ ) and ( FC = C_ ) then Exit( True );
+
+          Result := False;
+     end;
+//･･･････････････････････････････････････････
+     procedure CollectStar;  // 星・穴の境界・リンクを集める（構造を読むだけで、何も壊さない）
      var
         F :TDelaFace2D;
+        C, R :Byte;
+        B :TBond;
+        P :TDelaPoin2D;
+        I :Integer;
+        Known :Boolean;
      begin
-          Result := 0;
+          F := Poin_.Face;  C := Poin_.Corn;  // 頂点のアンカーから所属面へ直行する
 
-          F := F0;
           repeat
-                Inc( Result );  GoNext;
-          until F0 = F;
+                Star := Star + [ F ];
+
+                B.PA := F.Poin[ VertTableInc[ C ].L ];  // Poin_ の対辺。面の向きのまま PA → PB と辿ると穴は左側
+                B.PB := F.Poin[ VertTableInc[ C ].R ];
+                B.HF := F.Face[ C ];
+                B.HC := F.Corn[ C ];
+                B.FF := nil;
+                B.FC := 0;
+
+                Bonds := Bonds + [ B ];
+
+                Hull := Hull or B.PA.Inf or B.PB.Inf;
+
+                P := B.PA;  // リンク頂点は境界辺の始点として現れる（無限遠頂点と重複は除く）
+
+                if not P.Inf then
+                begin
+                     Known := False;
+
+                     for I := 0 to High( Links ) do if Links[ I ] = P then begin  Known := True;  Break;  end;
+
+                     if not Known then Links := Links + [ P ];
+                end;
+
+                R := VertTableInc[ C ].R;  // 次の面へ
+
+                C := VertTableInc[ F.Corn[ R ] ].R;
+                F :=               F.Face[ R ]    ;
+          until F = Star[ 0 ];
      end;
 //･･･････････････････････････････････････････
-     function EarOK :Boolean;  // 現在位置の耳 ( A, B, C ) が切り出せるか（＝最終形に現れる面か）
+     function MiniFaces :TArray<TDelaFace2D>;  // 小さなドロネー図の全面（成分の接続を辿って集める）
      var
-        A, B, C :TDelaPoin2D;
-        E, K, R :Byte;
-        F :TDelaFace2D;
+        I :Integer;
+        K :Byte;
+        N :TDelaFace2D;
+     begin
+          Result := [ Links[ 0 ].Face ];  // 種の頂点のアンカーは、面が張り直されるたびに更新されて常に成分内を指す
+
+          I := 0;
+          while I < Length( Result ) do
+          begin
+               for K := 1 to 3 do
+               begin
+                    N := Result[ I ].Face[ K ];
+
+                    if not Has( Result, N ) then Result := Result + [ N ];
+               end;
+
+               Inc( I );
+          end;
+     end;
+//･･･････････････････････････････････････････
+     function BuildMini :Boolean;  // リンク頂点だけの小さなドロネー図を、同じ集合の中に逐次添加法で作る
+     var                           // （入れ子の TDelaunay2D は作らない。面は同じ集合が所有する別成分になる）
+        I, Rest :Integer;
+        P :TDelaPoin2D;
+        F, H :TDelaFace2D;
+        Done :TArray<Boolean>;
+        Progress :Boolean;
      begin
           Result := False;
 
-          E := VertTableInc[ C0 ].L;
+          SeedFace( Links[ 0 ], Links[ 1 ] );
 
-          A := F0.Poin[ E                    ];
-          B := F0.Poin[ VertTableInc[ C0 ].R ];
-          C := F0.Face[ E ].Poin[ F0.Corn[ E ] ];
+          SetLength( Done, Length( Links ) );
 
-          // 自分が耳の円の内側にあること（耳が正の向きであることも兼ねる。裏向きの耳は符号が反転して自然に落ちる）
-          if Poin_.InCircled( A, B, C ) <= 0 then Exit;
+          Done[ 0 ] := True;  Done[ 1 ] := True;
 
-          // 耳を外したあとに残る面が有限なら、正の向きであること（無限遠点を含む面は幾何を持たないため無条件に良い）
-          if not ( A.Inf or C.Inf ) then
-          begin
-               if CrossProduct( Poin_.Pos - C.Pos, A.Pos - C.Pos ) <= 0 then Exit;
-          end;
+          Rest := Length( Links ) - 2;
 
-          // 耳の円が他のリング頂点を含まないこと（自分自身や無限遠点との判定は行列式が 0 以下となり、スキップは要らない）
-          F := F0;
-          K := C0;
-          repeat
-                if F.Poin[ VertTableInc[ K ].R ].InCircled( A, B, C ) > 0 then Exit;
+          repeat  // 挿入が新たな面を張ると、種の直線上などで見送られた頂点が入れるようになるので、
+                  // 挿入が起きなくなるまで繰り返す（有界なローカル構築の順序調整）
+                Progress := False;
 
-                R := VertTableInc[ K ].R;
+                for I := 2 to High( Links ) do
+                begin
+                     if Done[ I ] then Continue;
 
-                K := VertTableInc[ F.Corn[ R ] ].R;
-                F :=               F.Face[ R ]    ;
-          until F = F0;
+                     P := Links[ I ];
+
+                     H := nil;  // 位置検索は総当たりでよい（成分はリンクの大きさしかない）
+
+                     for F in MiniFaces do
+                     begin
+                          if F.IsHitCircle( P.Pos ) then begin  H := F;  Break;  end;
+                     end;
+
+                     if H = nil then Continue;
+
+                     InsertPoin( P, H );
+
+                     Done[ I ] := True;  Dec( Rest );  Progress := True;
+                end;
+          until not Progress;
+
+          if Rest > 0 then Exit;  // 退化（どの外接円にも入らない頂点が残った）→ 埋め戻し不能
+
+          Minis := MiniFaces;
 
           Result := True;
      end;
 //･･･････････････････････････････････････････
-     procedure ClipEar;  // 耳の底辺（Poin_ と B を結ぶ辺）をフリップして、次数を1つ下げる
+     function MatchSeams :Boolean;  // 境界辺 PA → PB を同じ向きで含む面（＝辺の左の面 ＝ 穴の側の面）を探す
      var
-        E, G :Byte;
+        I, J :Integer;
         F :TDelaFace2D;
+        C :Byte;
      begin
-          E := VertTableInc[ C0 ].L;
+          Result := False;
 
-          F := F0.Face[ E ];
-          G := F0.Corn[ E ];
-
-          F0.FlipEdge( E );  // 耳 ( A, B, C ) がそのまま完成品の面になる
-
-          F0 := F;                      // フリップ後、Poin_ は隣の面へ移る
-          C0 := VertTableInc[ G ].L;
-     end;
-//･･･････････････････････････････････････････
-     procedure Unhook;  // 次数3になった Poin_ を、3面 → 1面の畳み込みで取り除く
-     var
-        I :Integer;
-        R :Byte;
-        F :TDelaFace2D;
-        Ws :array [ 0..2 ] of TDelaPoin2D;
-        Fs :array [ 0..2 ] of TDelaFace2D;
-        Cs :array [ 0..2 ] of Byte;
-     begin
-          for I := 0 to 2 do  // リング頂点と外側リンクを収集する（収集順は時計回り）
+          for I := 0 to High( Bonds ) do
           begin
-               R := VertTableInc[ C0 ].R;
+               with Bonds[ I ] do
+               begin
+                    for J := 0 to High( Minis ) do
+                    begin
+                         F := Minis[ J ];
 
-               Ws[ I ] := F0.Poin[ R  ];
-               Fs[ I ] := F0.Face[ C0 ];
-               Cs[ I ] := F0.Corn[ C0 ];
+                         for C := 1 to 3 do
+                         begin
+                              if ( F.Poin[ C ] = PA ) and ( F.Poin[ VertTableInc[ C ].L ] = PB ) then
+                              begin
+                                   FF := F;
+                                   FC := VertTableInc[ C ].R;  // 辺 PA → PB の対頂点
+                              end;
+                         end;
+                    end;
 
-               F := F0;  GoNext;  F.Free;
+                    if FF = nil then Exit;  // 境界辺が現れない（共円の同数で別の対角が選ばれた等）→ 埋め戻し不能
+               end;
           end;
 
-          F := NewFace( Ws[ 2 ], Ws[ 1 ], Ws[ 0 ] );  // 反転して正の向きにする
+          for I := 1 to High( Bonds ) do  // 同じ縫い目が2本の境界辺に割り当たる退化（潰れた穴）も埋め戻し不能
+          begin
+               for J := 0 to I-1 do
+               begin
+                    if ( Bonds[ I ].FF = Bonds[ J ].FF ) and ( Bonds[ I ].FC = Bonds[ J ].FC ) then Exit;
+               end;
+          end;
 
-          F.Face[ 3 ] := Fs[ 1 ];  F.Corn[ 3 ] := Cs[ 1 ];   Fs[ 1 ].Face[ Cs[ 1 ] ] := F;  Fs[ 1 ].Corn[ Cs[ 1 ] ] := 3;
-          F.Face[ 1 ] := Fs[ 0 ];  F.Corn[ 1 ] := Cs[ 0 ];   Fs[ 0 ].Face[ Cs[ 0 ] ] := F;  Fs[ 0 ].Corn[ Cs[ 0 ] ] := 1;
-          F.Face[ 2 ] := Fs[ 2 ];  F.Corn[ 2 ] := Cs[ 2 ];   Fs[ 2 ].Face[ Cs[ 2 ] ] := F;  Fs[ 2 ].Corn[ Cs[ 2 ] ] := 2;
+          Result := True;
      end;
 //･･･････････････････････････････････････････
-var
-   N, K :Integer;
+     function FloodFills :Boolean;  // 埋め草から縫い目を越えずに広がり、閉包の境界が穴の境界と一致することを確かめる
+     var
+        I :Integer;
+        K, C :Byte;
+        F, N :TDelaFace2D;
+     begin
+          Result := False;
+
+          Fills := [];
+
+          for I := 0 to High( Bonds ) do
+          begin
+               if not Has( Fills, Bonds[ I ].FF ) then Fills := Fills + [ Bonds[ I ].FF ];
+          end;
+
+          I := 0;
+          while I < Length( Fills ) do
+          begin
+               F := Fills[ I ];
+
+               for K := 1 to 3 do
+               begin
+                    if IsSeam( F, K ) then Continue;  // 縫い目は越えない
+
+                    N := F.Face[ K ];
+
+                    if not Has( Fills, N ) then Fills := Fills + [ N ];
+               end;
+
+               Inc( I );
+          end;
+
+          for I := 0 to High( Fills ) do  // 無限遠面が埋め草になるのは、穴が凸包に接しているときだけ
+          begin
+               if ( Fills[ I ].InfCorn > 0 ) and not Hull then Exit;
+          end;
+
+          for I := 0 to High( Bonds ) do  // 縫い目の外側は、捨てられる面か、それ自身も縫い目（穴が自分と接する退化）で
+          begin                           // なければならない ―― これで閉包の境界が穴の境界とちょうど一致する
+               with Bonds[ I ] do
+               begin
+                    N := FF.Face[ FC ];
+                    C := FF.Corn[ FC ];
+               end;
+
+               if Has( Fills, N ) and not IsSeam( N, C ) then Exit;
+          end;
+
+          Result := True;
+     end;
+//･･･････････････････････････････････････････
 begin
      Result := False;
 
@@ -817,28 +1009,61 @@ begin
                Poin_.Free;
           end;
      else
-          F0 := Poin_.Face;  C0 := Poin_.Corn;  // 頂点のアンカーから所属面へ直行する
+          Hull := False;
 
-          if not Assigned( F0 ) then Exit;
+          CollectStar;
 
-          // 有効な耳の底辺をフリップして外していき、次数を3まで下げる
-          K := Degree;
-
-          for N := 1 to 2 * K * K + 8 do  // 有効な耳は必ず存在するので、この回数までに必ず次数3に達する
+          if Length( Bonds ) = 2 then  // 次数2（共線被覆の端点など）：境界辺2本は同じ辺の裏表 → 外側どうしを直接貼り合わせる
           begin
-               if K = 3 then Break;
+               if ( Bonds[ 0 ].PA <> Bonds[ 1 ].PB ) or ( Bonds[ 0 ].PB <> Bonds[ 1 ].PA ) then Exit;
 
-               if EarOK then begin ClipEar;  Dec( K ); end
-                        else GoNext;
+               Bonds[ 0 ].HF.Face[ Bonds[ 0 ].HC ] := Bonds[ 1 ].HF;  Bonds[ 0 ].HF.Corn[ Bonds[ 0 ].HC ] := Bonds[ 1 ].HC;
+               Bonds[ 1 ].HF.Face[ Bonds[ 1 ].HC ] := Bonds[ 0 ].HF;  Bonds[ 1 ].HF.Corn[ Bonds[ 1 ].HC ] := Bonds[ 0 ].HC;
+
+               for F in Star do F.Free;
+
+               Poin_.Free;
+
+               Bonds[ 0 ].HF.BindPoins;  // 星と共に消えたアンカーを張り直す
+               Bonds[ 1 ].HF.BindPoins;
+          end
+          else
+          begin
+               if Length( Links ) < 2 then Exit;  // 埋め戻しの種が張れない
+
+               AF := _PoinInf.Face;  AC := _PoinInf.Corn;  // 小さなドロネー図がアンカーを奪うので控えておく
+
+               if BuildMini and MatchSeams and FloodFills then
+               begin
+                    for I := 0 to High( Bonds ) do  // 縫い付け（埋め草の面と外側の面を貼り合わせる）
+                    begin
+                         with Bonds[ I ] do
+                         begin
+                              HF.Face[ HC ] := FF;  HF.Corn[ HC ] := FC;
+                              FF.Face[ FC ] := HF;  FF.Corn[ FC ] := HC;
+                         end;
+                    end;
+
+                    _PoinInf.Face := AF;  _PoinInf.Corn := AC;  // 先に戻す（星と共に消えるなら、後の張り直しが引き受ける）
+
+                    for F in Star  do F.Free;                              // 星を取り除き、
+                    for F in Minis do if not Has( Fills, F ) then F.Free;  // 使わなかった埋め草を捨てる
+
+                    Poin_.Free;
+
+                    for F in Fills do F.BindPoins;  // 埋め草に現れる頂点（全リンク頂点）のアンカーを張り直す
+               end
+               else
+               begin
+                    _PoinInf.Face := AF;  _PoinInf.Corn := AC;  // 何も壊していない ―― 小さなドロネー図だけ消して戻る
+
+                    for F in MiniFaces do F.Free;
+
+                    for F in Star do F.BindPoins;
+
+                    Exit;
+               end;
           end;
-
-          Assert( K = 3, 'DeletePoin: ear deadlock' );
-
-          if K > 3 then begin  _OnChange.Run( Self );  Exit;  end;  // 異常時は削除を断念する（分割は正しいまま残る）
-
-          Unhook;
-
-          Poin_.Free;
      end;
 
      _OnChange.Run( Self );
