@@ -142,8 +142,8 @@
         <DCCReference Include="_LIBRARY\LUXOPHIA\LUX\LUX.pas"/>
         <DCCReference Include="_LIBRARY\LUXOPHIA\LUX\LUX.D1.pas"/>
         <DCCReference Include="_LIBRARY\LUXOPHIA\LUX\LUX.D2.pas"/>
-        <DCCReference Include="_LIBRARY\LUX.Delaunay.D2.pas"/>
-        <DCCReference Include="_LIBRARY\LUX.Delaunay.D2.Viewer.pas">
+        <DCCReference Include="_LIBRARY\LUXOPHIA\LUX.Delaunay\D2\LUX.Delaunay.D2.pas"/>
+        <DCCReference Include="_LIBRARY\LUXOPHIA\LUX.Delaunay\D2\LUX.Delaunay.D2.Viewer.pas">
             <Form>DelaunayViewer</Form>
             <FormType>fmx</FormType>
             <DesignClass>TFrame</DesignClass>
