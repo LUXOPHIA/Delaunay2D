@@ -19,8 +19,8 @@ Built on the TriFlip mesh layers of [LUX](https://github.com/LUXOPHIA/LUX) (`LUX
 | `Pos :TSingle2D` | Coordinates. *(inherited)* |
 | `Face :TDelaFace2D` / `Corn :Byte` | Anchor: one face containing this vertex and the corner number in it. *(inherited)* |
 | `Inf :Boolean` | Whether this is the point at infinity. |
-| `Lift( Pos_ ) :TSingle3D` | Lifted coordinates `( X, Y, X²+Y² )` relative to the base point `Pos_`. |
-| `InCircled( P1_,P2_,P3_ ) :Single` | Sign of this point against the circle through `P1..P3` — positive = inside. |
+| `Lift( Pos_ ) :TDouble3D` | Lifted coordinates `( X, Y, X²+Y² )` relative to the base point `Pos_`. |
+| `InCircled( P1_,P2_,P3_ ) :Double` | Sign of this point against the circle through `P1..P3` — positive = inside. |
 
 ### `TDelaPoin2DInf` — the point at infinity
 
@@ -35,7 +35,7 @@ Derived from `TDelaPoin2D`; overrides `Lift` (constant `( 0, 0, 1 )`) and `InCir
 | `Corn[1..3] :Byte` | The neighbor's corner number opposite the shared edge. *(inherited)* |
 | `InfCorn :Byte` | Corner number of the infinite vertex — `0` means a finite face. |
 | `Circum :TSingle3D` | Homogeneous circumcenter `( X, Y, W )`. Finite face → center is `( X/W, Y/W )`; infinite face → `W = 0` and `( X, Y )` is the outward direction of the dual Voronoi edge. |
-| `InCircle( P1_,P2_,P3_, Pos_ ) :Single` *(class)* | Unified lift determinant — positive = `Pos_` inside the circle through `P1..P3`. |
+| `InCircle( P1_,P2_,P3_, Pos_ ) :Double` *(class)* | Unified lift determinant — positive = `Pos_` inside the circle through `P1..P3`. |
 | `IsHitCircle( Pos_ ) :Boolean` | Whether `Pos_` lies inside this face's circumcircle. |
 
 ### `TDelaPoinSet2D` / `TDelaFaceSet2D` — sets
@@ -52,9 +52,9 @@ Iterable containers (`for P in …`, `Count`, `[I]`). `TDelaFaceSet2D.Poins` exp
 | `Poins :TDelaPoinSet2D` | All finite vertices. |
 | `OnChange :TDelegates` | Multicast notification, fired after every structural change. Subscribe with `Add`, unsubscribe with `Del`. |
 | `HitCircleFace( Pos_ ) :TDelaFace2D` | A face whose circumcircle contains `Pos_` — jump & walk, expected O(n^1/3). |
-| `FindPoin( Pos_, Radius_ ) :TDelaPoin2D` | Nearest vertex within `Radius_`, or `nil`. |
-| `AddPoin( Pos_ ) :TDelaPoin2D` | Insert a point (Bowyer–Watson). Overload `AddPoin( Pos_, Face_ )` skips the search when the containing face is already known. |
-| `DeletePoin( Poin_ ) :Boolean` | Remove a vertex (flip-based). `False` for invalid input (`nil`, the point at infinity, or a vertex of another diagram). |
+| `FindNearPoin( Pos_, out Poin_ ) :Single` | The nearest vertex and the distance to it (locate + greedy descent). `Poin_ = nil` and `Infinity` when the diagram is empty. |
+| `AddPoin( Pos_ ) :TDelaPoin2D` | Insert a point (Bowyer–Watson), or `nil` when it cannot be inserted (duplicate / degenerate position). Overload `AddPoin( Pos_, Face_ )` skips the search when the containing face is already known. |
+| `DeletePoin( Poin_ ) :Boolean` | Remove a vertex — its star is deleted and the hole is refilled deterministically from a small Delaunay diagram of the link. `False`, with nothing modified, for invalid input or a degenerate configuration that cannot be refilled. |
 | `Clear` | Remove all points and faces (`PoinInf` survives). |
 
 ---
@@ -107,9 +107,8 @@ begin
           if F.InfCorn = 0 then { F.Poin[1..3] span a finite triangle };
      end;
 
-     P := D.FindPoin( TSingle2D.Create( 0, 0 ), 10 );          // nearest vertex within 10
-
-     if Assigned( P ) then D.DeletePoin( P );                  // delete
+     if D.FindNearPoin( TSingle2D.Create( 0, 0 ), P ) < 10    // nearest vertex and its distance
+     then D.DeletePoin( P );                                   // delete
 
      D.Free;
 end;
@@ -180,10 +179,9 @@ var
 begin
      P := Viewer1.ScrToPos( TPointF.Create( X, Y ) );
 
-     V := _Delaunay.FindPoin( P, 6 );
-
-     if Assigned( V ) then _Delaunay.DeletePoin( V )   // existing vertex → delete
-                      else _Delaunay.AddPoin   ( P );  // empty space    → insert
+     if _Delaunay.FindNearPoin( P, V ) < 6
+     then _Delaunay.DeletePoin( V )   // near an existing vertex → delete
+     else _Delaunay.AddPoin   ( P );  // empty space             → insert
 end;
 ```
 
