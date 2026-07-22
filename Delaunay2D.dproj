@@ -155,6 +155,7 @@
             <FormType>fmx</FormType>
             <DesignClass>TFrame</DesignClass>
         </DCCReference>
+        <DCCReference Include="_LIBRARY\LUXOPHIA\LUX\Data\LUX.Data.pas"/>
         <DCCReference Include="_LIBRARY\LUXOPHIA\LUX\Data\List\LUX.Data.List.pas"/>
         <DCCReference Include="_LIBRARY\LUXOPHIA\LUX\Data\List\LUX.Data.List.core.pas"/>
         <DCCReference Include="_LIBRARY\LUXOPHIA\LUX\Data\Tree\LUX.Data.Tree.pas"/>

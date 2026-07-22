@@ -17,6 +17,7 @@ uses
   LUX.CG2D in '_LIBRARY\LUXOPHIA\LUX.CG2D\LUX.CG2D.pas',
   LUX.CG2D.Shapers in '_LIBRARY\LUXOPHIA\LUX.CG2D\LUX.CG2D.Shapers.pas',
   LUX.CG2D.Viewer in '_LIBRARY\LUXOPHIA\LUX.CG2D\LUX.CG2D.Viewer.pas' {CGViewer: TFrame},
+  LUX.Data in '_LIBRARY\LUXOPHIA\LUX\Data\LUX.Data.pas',
   LUX.Data.List in '_LIBRARY\LUXOPHIA\LUX\Data\List\LUX.Data.List.pas',
   LUX.Data.List.core in '_LIBRARY\LUXOPHIA\LUX\Data\List\LUX.Data.List.core.pas',
   LUX.Data.Tree in '_LIBRARY\LUXOPHIA\LUX\Data\Tree\LUX.Data.Tree.pas',
