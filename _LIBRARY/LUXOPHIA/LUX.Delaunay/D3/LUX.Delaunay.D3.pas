@@ -133,6 +133,8 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
      TDelaPoinSet3D = class( TTetraPoinSet3D<TDelaPoin3D> )
      private
      protected
+       ///// M E T H O D
+       function LoadPoin( const Pos_:TSingle3D ) :TTetraPoin<TSingle3D>; override;  // 読み込む点を TDelaPoin3D として生成する
      public
      end;
 
@@ -187,6 +189,9 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
        ///// M E T H O D
        function NewPoin( const Pos_:TSingle3D ) :TDelaPoin3D;
        function NewCell( const Poin0_,Poin1_,Poin2_,Poin3_:TDelaPoin3D ) :TDelaCell3D;
+       function PoinCode( const Poin_:TTetraPoin<TSingle3D> ) :Integer; override;  // 無限遠頂点 = -2
+       function CodePoin( const Code_:Integer ) :TTetraPoin<TSingle3D>; override;  // -2 = 無限遠頂点
+       function LoadCell :TTetraCell<TSingle3D>; override;                         // 読み込む胞を TDelaCell3D として生成する
      public
        constructor Create; overload; override;
        destructor Destroy; override;
@@ -200,6 +205,7 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
        function AddPoin( const Pos_:TSingle3D ) :TDelaPoin3D; overload;     // 点の追加（退化配置で追加できなければ nil）
        function AddPoin( const Pos_:TSingle3D; const Cell_:TDelaCell3D ) :TDelaPoin3D; overload;
        function DeletePoin( const Poin_:TDelaPoin3D ) :Boolean;             // 点の削除（退化配置で埋め戻せなければ、何も変えずに False）
+       procedure LoadFromFile( const FileName_:String ); override;  // *.lxtc から復元（無限遠頂点も接続ごと再現される）
        procedure Clear; reintroduce;  // 点と胞を全消去する（PoinInf は残る）
      end;
 
@@ -344,6 +350,13 @@ end;
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaPoinSet3D
 
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& protected
+
+//////////////////////////////////////////////////////////////////// M E T H O D
+
+function TDelaPoinSet3D.LoadPoin( const Pos_:TSingle3D ) :TTetraPoin<TSingle3D>;
+begin
+     Result := TDelaPoin3D.Create( Pos_, Self );
+end;
 
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& public
 
@@ -699,6 +712,23 @@ begin
      Result.Poin[ 3 ] := Poin3_;
 
      Result.BindPoins;  // 頂点のアンカーを張り直す（削除時の星探索が O(1) で始まる）
+end;
+
+function TDelaunay3D.PoinCode( const Poin_:TTetraPoin<TSingle3D> ) :Integer;
+begin
+     if Poin_ = _PoinInf then Result := -2
+                         else Result := inherited;
+end;
+
+function TDelaunay3D.CodePoin( const Code_:Integer ) :TTetraPoin<TSingle3D>;
+begin
+     if Code_ = -2 then Result := _PoinInf
+                   else Result := inherited;
+end;
+
+function TDelaunay3D.LoadCell :TTetraCell<TSingle3D>;
+begin
+     Result := TDelaCell3D.Create( Self );
 end;
 
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& public
@@ -1219,6 +1249,15 @@ begin
      _OnChange.Run( Self );
 
      Result := True;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TDelaunay3D.LoadFromFile( const FileName_:String );
+begin
+     inherited;
+
+     _OnChange.Run( Self );
 end;
 
 //------------------------------------------------------------------------------
