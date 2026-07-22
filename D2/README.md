@@ -56,6 +56,10 @@ Iterable containers (`for P in …`, `Count`, `[I]`). `TDelaFaceSet2D.Poins` exp
 | `AddPoin( Pos_ ) :TDelaPoin2D` | Insert a point (Bowyer–Watson), or `nil` when it cannot be inserted (duplicate / degenerate position). Overload `AddPoin( Pos_, Face_ )` skips the search when the containing face is already known. |
 | `DeletePoin( Poin_ ) :Boolean` | Remove a vertex — its star is deleted and the hole is refilled deterministically from a small Delaunay diagram of the link. `False`, with nothing modified, for invalid input or a degenerate configuration that cannot be refilled. |
 | `Clear` | Remove all points and faces (`PoinInf` survives). |
+| `SaveToFile( FileName_ )` | Save the diagram to a `*.lxtf` file — coordinates and the complete connectivity (vertices, neighbors, corner codes), so the structure round-trips exactly. |
+| `LoadFromFile( FileName_ )` | Restore a diagram from a `*.lxtf` file. The current content is replaced entirely; the point at infinity is re-linked, and `OnChange` fires once. |
+
+**File format `*.lxtf`** — Radiance-HDR-style: the file starts as UTF-8 text — first line is the magic `LUXOPHIA TriFlip 1.0`, followed by any number of `name=value` option lines (`PoinsN`, `FacesN`, `PosSize`; unknown lines are skipped) — then a single blank line, and everything after it is binary: the point coordinates, then per face its 3 vertex indices, 3 neighbor-face indices (`Int32`; `-1` = nil, `-2` = the point at infinity) and the packed corner/flag byte.
 
 ---
 

@@ -58,6 +58,10 @@ Iterable containers (`for C in …`, `Count`, `[I]`). `TDelaCellSet3D.Poins` exp
 | `AddPoin( Pos_ ) :TDelaPoin3D` | Insert a point (Bowyer–Watson), or `nil` when it cannot be inserted (duplicate, a 3rd point collinear with the first two, or a degenerate position). Overload `AddPoin( Pos_, Cell_ )` skips the search when a containing cell is already known. |
 | `DeletePoin( Poin_ ) :Boolean` | Remove a vertex — its star is deleted and the hole is refilled deterministically from a small Delaunay diagram of the link (see below). `False`, with nothing modified, for invalid input or a degenerate configuration that cannot be refilled. |
 | `Clear` | Remove all points and cells (`PoinInf` survives). |
+| `SaveToFile( FileName_ )` | Save the diagram to a `*.lxtc` file — coordinates and the complete connectivity (vertices, neighbors, corner / rotation codes), so the structure round-trips exactly. |
+| `LoadFromFile( FileName_ )` | Restore a diagram from a `*.lxtc` file. The current content is replaced entirely; the point at infinity is re-linked, and `OnChange` fires once. |
+
+**File format `*.lxtc`** — Radiance-HDR-style: the file starts as UTF-8 text — first line is the magic `LUXOPHIA TetFlip 1.0`, followed by any number of `name=value` option lines (`PoinsN`, `CellsN`, `PosSize`; unknown lines are skipped) — then a single blank line, and everything after it is binary: the point coordinates, then per cell its 4 vertex indices, 4 neighbor-cell indices (`Int32`; `-1` = nil, `-2` = the point at infinity) and the `Corn` / `Bond` / `Flag` bytes.
 
 ---
 

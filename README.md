@@ -12,6 +12,7 @@
 - **Unified predicates** — the in-circle / in-sphere test is a single lift determinant. The point at infinity substitutes its own lift by polymorphism, so finite points and the infinite point, spheres and planes (spheres of infinite radius) all flow through one expression with no case analysis. Every determinant is evaluated in double precision after translating the operands to a nearby base point, so the predicates stay reliable far from the origin.
 - **Homogeneous circumcenters** — `Circum` returns the circumcenter in homogeneous coordinates. For cells at infinity it degenerates naturally to `W = 0`, where `(X, Y[, Z])` is the outward direction of the unbounded Voronoi edge. The entire Voronoi diagram, rays included, falls out of one formula with no branches and no divisions.
 - **Fast queries** — point location and nearest-point search by jump & walk: expected O(n^1/3) in 2D and O(n^1/4) in 3D, uniform over the domain.
+- **File persistence** — `SaveToFile` / `LoadFromFile` write the diagram to `*.lxtf` (2D) / `*.lxtc` (3D) files: a Radiance-HDR-style layout with a UTF-8 text header (magic line + options), a blank line, then binary data carrying the coordinates and the complete connectivity, so a diagram round-trips exactly.
 - **Viewers** — FMX `TFrame`s that subscribe to the diagram and rebuild their scene automatically: a Skia scene-graph viewer in 2D, and a Viewport3D viewer in 3D that renders the Delaunay and Voronoi edges as polygonal solids.
 
 ## Directory

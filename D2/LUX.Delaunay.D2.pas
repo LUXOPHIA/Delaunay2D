@@ -129,6 +129,8 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
      TDelaPoinSet2D = class( TTriPoinSet2D<TDelaPoin2D> )
      private
      protected
+       ///// M E T H O D
+       function LoadPoin( const Pos_:TSingle2D ) :TTriPoin<TSingle2D>; override;  // 読み込む点を TDelaPoin2D として生成する
      public
      end;
 
@@ -183,6 +185,9 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
        ///// M E T H O D
        function NewPoin( const Pos_:TSingle2D ) :TDelaPoin2D;
        function NewFace( const Poin1_,Poin2_,Poin3_:TDelaPoin2D ) :TDelaFace2D;
+       function PoinCode( const Poin_:TTriPoin<TSingle2D> ) :Integer; override;  // 無限遠頂点 = -2
+       function CodePoin( const Code_:Integer ) :TTriPoin<TSingle2D>; override;  // -2 = 無限遠頂点
+       function LoadFace :TTriFace<TSingle2D>; override;                         // 読み込む面を TDelaFace2D として生成する
      public
        constructor Create; overload; override;
        destructor Destroy; override;
@@ -196,6 +201,7 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
        function AddPoin( const Pos_:TSingle2D ) :TDelaPoin2D; overload;     // 点の追加（退化配置で追加できなければ nil）
        function AddPoin( const Pos_:TSingle2D; const Face_:TDelaFace2D ) :TDelaPoin2D; overload;
        function DeletePoin( const Poin_:TDelaPoin2D ) :Boolean;             // 点の削除（退化配置で埋め戻せなければ、何も変えずに False）
+       procedure LoadFromFile( const FileName_:String ); override;  // *.lxtf から復元（無限遠頂点も接続ごと再現される）
        procedure Clear; reintroduce;  // 点と面を全消去する（PoinInf は残る）
      end;
 
@@ -313,6 +319,13 @@ end;
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TDelaPoinSet2D
 
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& protected
+
+//////////////////////////////////////////////////////////////////// M E T H O D
+
+function TDelaPoinSet2D.LoadPoin( const Pos_:TSingle2D ) :TTriPoin<TSingle2D>;
+begin
+     Result := TDelaPoin2D.Create( Pos_, Self );
+end;
 
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& public
 
@@ -575,6 +588,23 @@ begin
      Result.Poin[ 3 ] := Poin3_;
 
      Result.BindPoins;  // 頂点のアンカーを張り直す（削除時の面探索が O(1) になる）
+end;
+
+function TDelaunay2D.PoinCode( const Poin_:TTriPoin<TSingle2D> ) :Integer;
+begin
+     if Poin_ = _PoinInf then Result := -2
+                         else Result := inherited;
+end;
+
+function TDelaunay2D.CodePoin( const Code_:Integer ) :TTriPoin<TSingle2D>;
+begin
+     if Code_ = -2 then Result := _PoinInf
+                   else Result := inherited;
+end;
+
+function TDelaunay2D.LoadFace :TTriFace<TSingle2D>;
+begin
+     Result := TDelaFace2D.Create( Self );
 end;
 
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& public
@@ -1069,6 +1099,15 @@ begin
      _OnChange.Run( Self );
 
      Result := True;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TDelaunay2D.LoadFromFile( const FileName_:String );
+begin
+     inherited;
+
+     _OnChange.Run( Self );
 end;
 
 //------------------------------------------------------------------------------
