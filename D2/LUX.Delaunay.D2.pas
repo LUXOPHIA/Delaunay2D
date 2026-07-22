@@ -26,10 +26,10 @@
 //   円）がリフト空間では同じ「平面」になることの帰結であり、場合分けは要らない。
 //   行列式は必ず近傍の点を基準に平行移動してから倍精度で評価する（桁落ち対策。
 //   外心も同様で、絶対座標のまま評価する式は存在しない）。
-// ・点の追加は Bowyer-Watson 法。新しい点を円に含む面群（キャビティ）を
-//   FaceTree で再帰的に削除し、境界辺ごとに新しい面を張り直す。
-//   キャビティの内部に頂点が存在しないため、その双対グラフは木になり、
-//   一度の再帰で削除・生成・縫合が完了する。
+// ・点の追加は Bowyer-Watson 法の2相方式。①新しい点を円に含む面群（キャビティ）を
+//   Flag で塗り広げて集め（マーク）、②境界辺ごとに新しい面を張って外側と縫い、
+//   最後に塗った面をまとめて解放する（カーブ）。マークは冪等なので、共円の退化で
+//   同じ面へ複数の経路から到達しても二重処理は起こらない（3D と同型）。
 // ・点の削除は「星の除去と埋め戻し」。頂点の星（頂点を含む面の集合）を取り除くと
 //   星型の穴が開く。穴の境界（リンク）の頂点だけから成る小さなドロネー図を、同じ
 //   集合の中の独立した成分として逐次添加法で作り（入れ子の TDelaunay2D は作らない）、
@@ -73,19 +73,6 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
      TDelaFace2D    = class;
      TDelaFaceSet2D = class;
      TDelaunay2D    = class;
-
-     //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$【 R E C O R D 】
-
-     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TFaceJoint
-
-     TFaceJoint = record
-     private
-     public
-       FaceL :TDelaFace2D;
-       FaceR :TDelaFace2D;
-       VertL :Byte;
-       VertR :Byte;
-     end;
 
      //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$【 C L A S S 】
 
@@ -176,8 +163,6 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
        ///// M E T H O D
        function SeedFace( const P1_,P2_:TDelaPoin2D ) :TDelaFace2D;
        procedure InitFace;
-       function FaceTree( const Poin_:TDelaPoin2D; const Face_:TDelaFace2D; const Vert_:Byte ) :TFaceJoint;
-       procedure Connect( const J_,JL_,JR_:TFaceJoint );
        procedure InsertPoin( const Poin_:TDelaPoin2D; const Face_:TDelaFace2D );
        function JumpPoin( const Pos_:TSingle2D ) :TDelaPoin2D;
        function ScanCircleFace( const Pos_:TSingle2D ) :TDelaFace2D;
@@ -210,14 +195,6 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 implementation //############################################################### ■
 
 uses System.Math;
-
-//$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$【 R E C O R D 】
-
-//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TFaceJoint
-
-//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& private
-
-//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& public
 
 //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$【 C L A S S 】
 
@@ -446,94 +423,79 @@ end;
 
 //------------------------------------------------------------------------------
 
-function TDelaunay2D.FaceTree( const Poin_:TDelaPoin2D; const Face_:TDelaFace2D; const Vert_:Byte ) :TFaceJoint;
-var
-   JL, JR :TFaceJoint;
-   C :TDelaFace2D;
-begin
-     if Face_.IsHitCircle( Poin_.Pos ) then
-     begin
-          with VertTableInc[ Vert_ ] do
-          begin
-               JL := FaceTree( Poin_, Face_.Face[ R ], Face_.Corn[ R ] );
-               JR := FaceTree( Poin_, Face_.Face[ L ], Face_.Corn[ L ] );
-          end;
-
-          with JL do
-          begin
-               with FaceR do
-               begin
-                    Face[ VertR ] := JR.FaceL;
-                    Corn[ VertR ] := JR.VertL;
-               end
-          end;
-          with JR do
-          begin
-               with FaceL do
-               begin
-                    Face[ VertL ] := JL.FaceR;
-                    Corn[ VertL ] := JL.VertR;
-               end
-          end;
-
-          Face_.Free;
-
-          with Result do
-          begin
-               FaceL := JL.FaceL;  VertL := JL.VertL;
-               FaceR := JR.FaceR;  VertR := JR.VertR;
-          end;
-     end
-     else
-     begin
-          with VertTableInc[ Vert_ ] do C := NewFace( Face_.Poin[ L ], Poin_, Face_.Poin[ R ] );
-
-          C.Face[ 2 ] := Face_;
-          C.Corn[ 2 ] := Vert_;
-
-          Face_.Face[ Vert_ ] := C;
-          Face_.Corn[ Vert_ ] := 2;
-
-          with Result do
-          begin
-               FaceL := C;  VertL := 3;
-               FaceR := C;  VertR := 1;
-          end;
-     end;
-end;
-
-procedure TDelaunay2D.Connect( const J_,JL_,JR_:TFaceJoint );
-begin
-     with J_ do
-     begin
-          with FaceL do
-          begin
-               Face[ VertL ] := JL_.FaceR;
-               Corn[ VertL ] := JL_.VertR;
-          end;
-          with FaceR do
-          begin
-               Face[ VertR ] := JR_.FaceL;
-               Corn[ VertR ] := JR_.VertL;
-          end;
-     end;
-end;
-
-//------------------------------------------------------------------------------
-
 procedure TDelaunay2D.InsertPoin( const Poin_:TDelaPoin2D; const Face_:TDelaFace2D );
+// 2相方式。①マーク: 追加点を円に含む面を Flag で塗り広げて集める。塗りは冪等なので、
+// 共円の退化で同じ面へ複数の経路から到達しても二重処理は起こらない。②カーブ: 境界辺
+// （塗った面と外側の面の間の辺）ごとに新しい面を張って外側と縫い、新しい面どうしを
+// 追加点の周りで縫い、最後に塗った面をまとめて解放する（解放は縫合の後なので、
+// 削除済みの面への再突入は構造的に起こらない）
 var
-   J1, J2, J3 :TFaceJoint;
+   Star :TArray<TDelaFace2D>;  // キャビティ（塗った面）
+   News :TArray<TDelaFace2D>;  // 境界辺に張った新しい面 ( A, Poin_, B )
+   I, J :Integer;
+   K, GK :Byte;
+   F, G, C, D :TDelaFace2D;
 begin
-     J1 := FaceTree( Poin_, Face_.Face[ 1 ], Face_.Corn[ 1 ] );
-     J2 := FaceTree( Poin_, Face_.Face[ 2 ], Face_.Corn[ 2 ] );
-     J3 := FaceTree( Poin_, Face_.Face[ 3 ], Face_.Corn[ 3 ] );
+     Face_.Flag := True;  Star := [ Face_ ];  // 呼び出し側の契約: Face_ は追加点を円に含む
 
-     Face_.Free;
+     I := 0;
+     while I < Length( Star ) do  // ①マーク
+     begin
+          F := Star[ I ];  Inc( I );
 
-     Connect( J1, J2, J3 );
-     Connect( J2, J3, J1 );
-     Connect( J3, J1, J2 );
+          for K := 1 to 3 do
+          begin
+               G := F.Face[ K ];
+
+               if not G.Flag and G.IsHitCircle( Poin_.Pos ) then
+               begin
+                    G.Flag := True;  Star := Star + [ G ];
+               end;
+          end;
+     end;
+
+     News := [];
+
+     for I := 0 to High( Star ) do  // ②カーブ: 境界辺に新しい面を張り、外側と縫う
+     begin
+          F := Star[ I ];
+
+          for K := 1 to 3 do
+          begin
+               G := F.Face[ K ];
+
+               if G.Flag then Continue;  // キャビティの内部の辺
+
+               GK := F.Corn[ K ];  // 外側の面から見た境界辺の番号
+
+               with VertTableInc[ GK ] do C := NewFace( G.Poin[ L ], Poin_, G.Poin[ R ] );
+
+               C.Face[ 2 ]  := G;  C.Corn[ 2 ]  := GK;
+               G.Face[ GK ] := C;  G.Corn[ GK ] := 2 ;
+
+               News := News + [ C ];
+          end;
+     end;
+
+     for I := 0 to High( News ) do  // 新しい面どうしを追加点の周りで縫う。
+     begin                          // C = ( A, P, B ) の辺 ( P, B ) の相手は、B から始まる面 D = ( B, P, X )
+          C := News[ I ];
+
+          for J := 0 to High( News ) do
+          begin
+               D := News[ J ];
+
+               if D.Poin[ 1 ] = C.Poin[ 3 ] then
+               begin
+                    C.Face[ 1 ] := D;  C.Corn[ 1 ] := 3;
+                    D.Face[ 3 ] := C;  D.Corn[ 3 ] := 1;
+
+                    Break;
+               end;
+          end;
+     end;
+
+     for I := 0 to High( Star ) do Star[ I ].Free;  // マークは面ごと消える
 end;
 
 //------------------------------------------------------------------------------
