@@ -27,11 +27,11 @@
 //   球）がリフト空間では同じ「超平面」になることの帰結であり、場合分けは要らない。
 //   行列式は必ず近傍の点を基準に平行移動してから倍精度で評価する（桁落ち対策。
 //   向きの判定や外心も同様で、絶対座標のまま評価する式は存在しない）。
-// ・点の追加は Bowyer-Watson 法。新しい点を球に含む胞群（キャビティ）を CellTree で
-//   再帰的に削除し、境界面ごとに新しい胞を張り直す。3D ではキャビティの双対が木に
-//   ならない（同じ胞に複数の経路で到達しうる）ため、削除済みの胞に再突入したときは
-//   一時的なプレースホルダ胞を「縫合待ちの受け箱」として置き、貼り合わせの情報を
-//   受け渡す。再帰が終わればプレースホルダは全て破棄される。
+// ・点の追加は Bowyer-Watson 法の2相方式。①新しい点を球に含む胞群（キャビティ）を
+//   Flag で塗り広げて集め（マーク）、②境界面ごとに新しい胞を張って外側と縫い、
+//   最後に塗った胞をまとめて解放する（カーブ）。マークは冪等なので、キャビティの
+//   双対が木にならない 3D でも（同じ胞に複数の経路で到達しても）二重処理は起こらず、
+//   削除済みの胞への再突入も構造的に起こらない（2D と同型・プレースホルダ不要）。
 // ・点の削除は「星の除去と埋め戻し」。頂点の星（頂点を含む胞の集合）を取り除くと
 //   星型の穴が開く。穴の境界（リンク）の頂点だけから成る小さなドロネー図を、同じ
 //   集合の中の独立した成分として逐次添加法で作り（入れ子の TDelaunay3D は作らない）、
@@ -77,19 +77,6 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
      TDelaCell3D    = class;
      TDelaCellSet3D = class;
      TDelaunay3D    = class;
-
-     //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$【 R E C O R D 】
-
-     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TCellJoint
-
-     // キャビティ縫合の合わせ面（入口の面の3辺に対応する、縫合待ちの3面）。
-     TCellJoint = record
-     private
-     public
-       Cell1 :TDelaCell3D;  Corn1 :Byte;  Edge1 :Byte;
-       Cell2 :TDelaCell3D;  Corn2 :Byte;  Edge2 :Byte;
-       Cell3 :TDelaCell3D;  Corn3 :Byte;  Edge3 :Byte;
-     end;
 
      //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$【 C L A S S 】
 
@@ -174,7 +161,6 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
      TDelaunay3D = class( TDelaCellSet3D )
      private
        _PoinInf  :TDelaPoin3D;
-       _TempSet  :TDelaCellSet3D;  // キャビティ縫合のプレースホルダ胞の置き場
        _OnChange :TDelegates;
        ///// A C C E S S O R
        function GetCells :TDelaCellSet3D;
@@ -243,10 +229,6 @@ begin
 end;
 
 //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$【 R E C O R D 】
-
-//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TCellJoint
-
-//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& public
 
 //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$【 C L A S S 】
 
@@ -485,142 +467,93 @@ end;
 //------------------------------------------------------------------------------
 
 procedure TDelaunay3D.InsertPoin( const Poin_:TDelaPoin3D; const Cell_:TDelaCell3D );
-//･･･････････････････････････････････････････
-     function CellTree( const Cell_:TDelaCell3D; const Corn_:Byte; const E1_,E2_,E3_:Byte ) :TCellJoint;
-     //･････････････････････････････････
-          procedure Connect( const J1_,J2_,J3_:TCellJoint );  // 入口の面の辺の周りで、新しい胞どうしを縫う
-          begin
-               with J1_ do
-               begin
-                    Cell2.Cell[ Corn2 ] := J2_.Cell3;
-                    Cell2.Corn[ Corn2 ] := J2_.Corn3;
-                    Cell2.Bond[ Corn2 ] := BondTable[ Edge2 ]._[ J2_.Edge3 ];
-
-                    Cell3.Cell[ Corn3 ] := J3_.Cell2;
-                    Cell3.Corn[ Corn3 ] := J3_.Corn2;
-                    Cell3.Bond[ Corn3 ] := BondTable[ Edge3 ]._[ J3_.Edge2 ];
-               end;
-          end;
-     //･････････････････････････････････
-     var
-        V1, V2, V3 :Byte;
-        J1, J2, J3 :TCellJoint;
-        C :TDelaCell3D;
-     begin
-          V1 := VertTable[ Corn_ ]._[ E1_ ];
-          V2 := VertTable[ Corn_ ]._[ E2_ ];
-          V3 := VertTable[ Corn_ ]._[ E3_ ];
-
-          case Cell_.Flag of
-            0: begin
-                    if Cell_.IsHitSphere( Poin_.Pos ) then
-                    begin
-                         Cell_.Flag := 1;  // キャビティに取り込む
-
-                         with BondTable[ Cell_.Bond[ V1 ] ] do J1 := CellTree( Cell_.Cell[ V1 ], Cell_.Corn[ V1 ], _[ E1_ ], _[ E3_ ], _[ E2_ ] );
-                         with BondTable[ Cell_.Bond[ V2 ] ] do J2 := CellTree( Cell_.Cell[ V2 ], Cell_.Corn[ V2 ], _[ E2_ ], _[ E1_ ], _[ E3_ ] );
-                         with BondTable[ Cell_.Bond[ V3 ] ] do J3 := CellTree( Cell_.Cell[ V3 ], Cell_.Corn[ V3 ], _[ E3_ ], _[ E2_ ], _[ E1_ ] );
-
-                         Cell_.Free;
-
-                         Connect( J1, J2, J3 );
-                         Connect( J2, J3, J1 );
-                         Connect( J3, J1, J2 );
-
-                         with Result do
-                         begin
-                              Cell1 := J1.Cell1;  Corn1 := J1.Corn1;  Edge1 := J1.Edge1;
-                              Cell2 := J2.Cell1;  Corn2 := J2.Corn1;  Edge2 := J2.Edge1;
-                              Cell3 := J3.Cell1;  Corn3 := J3.Corn1;  Edge3 := J3.Edge1;
-                         end;
-                    end
-                    else
-                    begin
-                         C := NewCell( Poin_, Cell_.Poin[ V1 ], Cell_.Poin[ V2 ], Cell_.Poin[ V3 ] );  // キャビティの境界面に新しい胞を張る
-
-                         C.Cell[ 0 ] := Cell_;
-                         C.Corn[ 0 ] := Corn_;
-                         C.Bond[ 0 ] := BondTable[ 1 ]._[ E1_ ];
-
-                         Cell_.Cell[ Corn_ ] := C;
-                         Cell_.Corn[ Corn_ ] := 0;
-                         Cell_.Bond[ Corn_ ] := BondTable[ E1_ ]._[ 1 ];
-
-                         with Result do
-                         begin
-                              Cell1 := C;  Corn1 := 1;  Edge1 := 1;
-                              Cell2 := C;  Corn2 := 2;  Edge2 := 2;
-                              Cell3 := C;  Corn3 := 3;  Edge3 := 3;
-                         end;
-                    end;
-               end;
-            1: begin
-                    C := TDelaCell3D.Create( _TempSet );  // 削除済みの胞に別の経路で再突入 → プレースホルダを縫合待ちの受け箱にする
-
-                    C.Flag := 2;
-
-                    C.Corn[ 1 ] := 0;
-                    C.Corn[ 2 ] := 0;
-                    C.Corn[ 3 ] := 0;
-
-                    Cell_.Cell[ Corn_ ] := C;
-                    Cell_.Corn[ Corn_ ] := 0;
-                    Cell_.Bond[ Corn_ ] := BondTable[ E1_ ]._[ 1 ];
-
-                    with Result do
-                    begin
-                         Cell1 := C;  Corn1 := 1;  Edge1 := 1;
-                         Cell2 := C;  Corn2 := 2;  Edge2 := 2;
-                         Cell3 := C;  Corn3 := 3;  Edge3 := 3;
-                    end;
-               end;
-            2: begin
-                    with Result do  // プレースホルダに残された縫合の相手をそのまま返す
-                    begin
-                         Cell1 := Cell_.Cell[ V1 ];  Corn1 := Cell_.Corn[ V1 ];  Edge1 := BondTable[ Cell_.Bond[ V1 ] ]._[ E1_ ];
-                         Cell2 := Cell_.Cell[ V2 ];  Corn2 := Cell_.Corn[ V2 ];  Edge2 := BondTable[ Cell_.Bond[ V2 ] ]._[ E2_ ];
-                         Cell3 := Cell_.Cell[ V3 ];  Corn3 := Cell_.Corn[ V3 ];  Edge3 := BondTable[ Cell_.Bond[ V3 ] ]._[ E3_ ];
-                    end;
-               end;
-          end;
-     end;
-//･･･････････････････････････････････････････
-     procedure Connect( const J0_,J1_,J2_,J3_:TCellJoint );  // 元の胞の4面から伸びた縫合面どうしを縫う
-     begin
-          with J0_ do
-          begin
-               Cell1.Cell[ Corn1 ] := J1_.Cell1;
-               Cell1.Corn[ Corn1 ] := J1_.Corn1;
-               Cell1.Bond[ Corn1 ] := BondTable[ Edge1 ]._[ J1_.Edge1 ];
-
-               Cell2.Cell[ Corn2 ] := J2_.Cell2;
-               Cell2.Corn[ Corn2 ] := J2_.Corn2;
-               Cell2.Bond[ Corn2 ] := BondTable[ Edge2 ]._[ J2_.Edge2 ];
-
-               Cell3.Cell[ Corn3 ] := J3_.Cell3;
-               Cell3.Corn[ Corn3 ] := J3_.Corn3;
-               Cell3.Bond[ Corn3 ] := BondTable[ Edge3 ]._[ J3_.Edge3 ];
-          end;
-     end;
-//･･･････････････････････････････････････････
+// 2相方式。①マーク: 追加点を球に含む胞を Flag で塗り広げて集める。塗りは冪等なので、
+// キャビティの双対が木にならない 3D でも（同じ胞に複数の経路で到達しても）二重処理は
+// 起こらない。②カーブ: 境界面（塗った胞と外側の胞の間の面）ごとに新しい胞を張って
+// 外側と縫い、新しい胞どうしを追加点の周りで縫い、最後に塗った胞をまとめて解放する
+// （解放は縫合の後なので、削除済みの胞への再突入は構造的に起こらない）
 var
-   J0, J1, J2, J3 :TCellJoint;
+   Star :TArray<TDelaCell3D>;  // キャビティ（塗った胞）
+   News :TArray<TDelaCell3D>;  // 境界面に張った新しい胞 ( Poin_, F1, F3, F2 )
+   I, J :Integer;
+   K, GK :Byte;
+   CA, CB :Shortint;
+   T, G, C, D :TDelaCell3D;
+   A, B :TDelaPoin3D;
 begin
-     Cell_.Flag := 1;
+     Cell_.Flag := 1;  Star := [ Cell_ ];  // 呼び出し側の契約: Cell_ は追加点を球に含む
 
-     with BondTable[ Cell_.Bond[ 0 ] ] do J0 := CellTree( Cell_.Cell[ 0 ], Cell_.Corn[ 0 ], _[ 1 ], _[ 2 ], _[ 3 ] );
-     with BondTable[ Cell_.Bond[ 1 ] ] do J1 := CellTree( Cell_.Cell[ 1 ], Cell_.Corn[ 1 ], _[ 1 ], _[ 2 ], _[ 3 ] );
-     with BondTable[ Cell_.Bond[ 2 ] ] do J2 := CellTree( Cell_.Cell[ 2 ], Cell_.Corn[ 2 ], _[ 1 ], _[ 2 ], _[ 3 ] );
-     with BondTable[ Cell_.Bond[ 3 ] ] do J3 := CellTree( Cell_.Cell[ 3 ], Cell_.Corn[ 3 ], _[ 1 ], _[ 2 ], _[ 3 ] );
+     I := 0;
+     while I < Length( Star ) do  // ①マーク
+     begin
+          T := Star[ I ];  Inc( I );
 
-     Cell_.Free;
+          for K := 0 to 3 do
+          begin
+               G := T.Cell[ K ];
 
-     Connect( J0, J1, J2, J3 );
-     Connect( J1, J0, J3, J2 );
-     Connect( J2, J3, J0, J1 );
-     Connect( J3, J2, J1, J0 );
+               if ( G.Flag = 0 ) and G.IsHitSphere( Poin_.Pos ) then
+               begin
+                    G.Flag := 1;  Star := Star + [ G ];
+               end;
+          end;
+     end;
 
-     _TempSet.Clear;  // プレースホルダは役目を終えた
+     News := [];
+
+     for I := 0 to High( Star ) do  // ②カーブ: 境界面に新しい胞を張り、外側と縫う
+     begin
+          T := Star[ I ];
+
+          for K := 0 to 3 do
+          begin
+               G := T.Cell[ K ];
+
+               if G.Flag <> 0 then Continue;  // キャビティの内部の面
+
+               GK := T.Corn[ K ];  // 外側の胞から見た境界面の番号
+
+               // 境界面の頂点は外側の胞の正準順 VertTable[ GK ] で取り出す。頂点 GK（外側の
+               // 頂点）を追加点で置き換えると向きが反転するため、奇置換で正の向きに戻す
+               with VertTable[ GK ] do C := NewCell( Poin_, G.Poin[ _[ 1 ] ], G.Poin[ _[ 3 ] ], G.Poin[ _[ 2 ] ] );
+
+               C.Weld( 0, G, GK );  // 追加点の対面（面0）を外側と縫う。回転コードは頂点の同一性から導出される
+
+               News := News + [ C ];
+          end;
+     end;
+
+     for I := 0 to High( News ) do  // 新しい胞どうしを追加点の周りで縫う。
+     begin                          // 側面 K（追加点を含む面）の相手は、残る2頂点 A, B を共有する胞
+          C := News[ I ];
+
+          for K := 1 to 3 do
+          begin
+               if C.Cell[ K ] <> C then Continue;  // 縫合済み（Weld は両側を張る）
+
+               A := C.Poin[ K mod 3 + 1 ];          // 側面 K の頂点 = { Poin_, A, B }（1..3 のうち K 以外の2つ）
+               B := C.Poin[ ( K + 1 ) mod 3 + 1 ];
+
+               for J := 0 to High( News ) do
+               begin
+                    D := News[ J ];
+
+                    if D = C then Continue;
+
+                    CA := D.CornOf( A );
+                    CB := D.CornOf( B );
+
+                    if ( CA > 0 ) and ( CB > 0 ) then  // A も B も持つ胞は境界面の隣だけ
+                    begin
+                         C.Weld( K, D, 6 - CA - CB );  // D の残る側面が合わせ面
+
+                         Break;
+                    end;
+               end;
+          end;
+     end;
+
+     for I := 0 to High( Star ) do Star[ I ].Free;  // マークは胞ごと消える
 end;
 
 //------------------------------------------------------------------------------
@@ -738,8 +671,6 @@ begin
      inherited;
 
      _PoinInf := TDelaPoin3DInf.Create( TSingle3D.Create( 0, 0, 0 ) );
-
-     _TempSet := TDelaCellSet3D.Create;
 end;
 
 destructor TDelaunay3D.Destroy;
@@ -747,8 +678,6 @@ begin
      inherited;        // 点と胞は集合ごと解放される
 
      _PoinInf.Free;
-
-     _TempSet.Free;
 end;
 
 //////////////////////////////////////////////////////////////////// M E T H O D
