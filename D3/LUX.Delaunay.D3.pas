@@ -187,6 +187,7 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
        property OnChange :TDelegates     read _OnChange;  // 構造が変化したときに発火（Add / Del で多播購読）
        ///// M E T H O D
        function HitSphereCell( const Pos_:TSingle3D ) :TDelaCell3D;  // Pos_ を空球に含む胞（ジャンプ＆ウォーク・期待 O(n^(1/4))）
+       function FindMaxCircle :TDelaCell3D;  // 無限遠胞（＝半径無限大の空球）を除く、最大半径の空球を持つ胞（有限胞が無ければ nil）
        function FindNearPoin( const Pos_:TSingle3D; out Poin_:TDelaPoin3D ) :Single;  // Pos_ の最近傍点と、そこまでの距離（点が無ければ nil と Infinity）
        function AddPoin( const Pos_:TSingle3D ) :TDelaPoin3D; overload;     // 点の追加（退化配置で追加できなければ nil）
        function AddPoin( const Pos_:TSingle3D; const Cell_:TDelaCell3D ) :TDelaPoin3D; overload;
@@ -729,6 +730,28 @@ begin
      end;
 
      Result := ScanSphereCell( Pos_ );  // 歩行が収束しない退化配置 → 全胞走査へ退避する
+end;
+
+//------------------------------------------------------------------------------
+
+function TDelaunay3D.FindMaxCircle :TDelaCell3D;
+var
+   C :TDelaCell3D;
+   V :TSingle4D;
+   R2, Rm :Single;
+begin
+     Result := nil;  Rm := -1;
+
+     for C in Cells do
+     begin
+          if C.InfCorn >= 0 then Continue;  // 無限遠胞（半径無限大の空球）は除く
+
+          V := C.Circum;  // 同次外心 → 外心 ( X, Y, Z )/W と、頂点までの距離の平方が半径の平方
+
+          R2 := Distance2( TSingle3D.Create( V.X, V.Y, V.Z ) / V.W, C.Poin[ 0 ].Pos );
+
+          if R2 > Rm then begin  Rm := R2;  Result := C;  end;
+     end;
 end;
 
 //------------------------------------------------------------------------------

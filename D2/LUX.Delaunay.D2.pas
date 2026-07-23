@@ -182,6 +182,7 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
        property OnChange :TDelegates     read _OnChange;  // 構造が変化したときに発火（Add / Del で多播購読）
        ///// M E T H O D
        function HitCircleFace( const Pos_:TSingle2D ) :TDelaFace2D;  // Pos_ を空円に含む面（ジャンプ＆ウォーク・期待 O(n^(1/3))）
+       function FindMaxCircle :TDelaFace2D;  // 無限遠面（＝半径無限大の空円）を除く、最大半径の空円を持つ面（有限面が無ければ nil）
        function FindNearPoin( const Pos_:TSingle2D; out Poin_:TDelaPoin2D ) :Single;  // Pos_ の最近傍点と、そこまでの距離（点が無ければ nil と Infinity）
        function AddPoin( const Pos_:TSingle2D ) :TDelaPoin2D; overload;     // 点の追加（退化配置で追加できなければ nil）
        function AddPoin( const Pos_:TSingle2D; const Face_:TDelaFace2D ) :TDelaPoin2D; overload;
@@ -633,6 +634,28 @@ begin
      end;
 
      Result := ScanCircleFace( Pos_ );  // 歩行が収束しない退化配置 → 全面走査へ退避する
+end;
+
+//------------------------------------------------------------------------------
+
+function TDelaunay2D.FindMaxCircle :TDelaFace2D;
+var
+   F :TDelaFace2D;
+   V :TSingle3D;
+   R2, Rm :Single;
+begin
+     Result := nil;  Rm := -1;
+
+     for F in Faces do
+     begin
+          if F.InfCorn <> 0 then Continue;  // 無限遠面（半径無限大の空円）は除く
+
+          V := F.Circum;  // 同次外心 → 外心 ( X, Y )/W と、頂点までの距離の平方が半径の平方
+
+          R2 := Distance2( TSingle2D.Create( V.X, V.Y ) / V.Z, F.Poin[ 1 ].Pos );
+
+          if R2 > Rm then begin  Rm := R2;  Result := F;  end;
+     end;
 end;
 
 //------------------------------------------------------------------------------
