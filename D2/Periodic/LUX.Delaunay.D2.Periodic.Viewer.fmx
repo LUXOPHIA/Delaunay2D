@@ -1,0 +1,5 @@
+﻿object PeriDelaunayViewer: TPeriDelaunayViewer
+  Size.Width = 400.00000000000000000
+  Size.Height = 300.00000000000000000
+  Size.PlatformDefault = False
+end
