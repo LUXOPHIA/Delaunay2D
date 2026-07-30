@@ -43,6 +43,9 @@
 // ・通常の場合（p が自分の周期像とドロネー隣接にならない場合）は、境界辺ごとに
 //   錐の面 ( A, p, B ) を張る普通の Bowyer-Watson で正しい。錐の妥当性は
 //   「どの錐面の外接円も p の周期像を含まない」ことを厳密述語で確かめる。
+//   新しい面どうしの縫合は、平面版と同じく CanWeld（貼り合わせ可能性）の走査で行う。
+//   ただし普遍被覆では頂点の実体が一致しても平行移動像が異なれば別の点なので、
+//   TPeriFace2D.CanWeld は辺の格子変位まで鏡像で一致することを要求する。
 // ・疎な配置では p が自分の周期像と隣接し、p を2つの角に持つ面（自己辺 p–p）が
 //   必要になる。このとき錐は正しくないので、p̂ のスター（扇）を候補点集合
 //   （穴の境界頂点とその平行移動像 ＋ p の格子像）からギフトラッピングで直接
@@ -122,6 +125,7 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
        ///// M E T H O D
        function CornGrid( const I_:Byte ) :TPoint;     // 角の格子座標（自面のリフト・q 単位・厳密）
        function CornPos( const I_:Byte ) :TSingle2D;   // 角の幾何座標（自面のリフト。格子上なので厳密）
+       function CanWeld( const K_:Byte; const Face_:TPeriFace2D; const CornK_:Byte ) :Boolean; reintroduce;  // 貼り合わせられるか（頂点の実体に加えて、格子変位まで鏡像で対応するか）
        procedure CircumD( out Center_:TDouble2D; out Radius2_:Double );  // 外心（自面のリフト）と半径の平方
        function CircumPos :TSingle2D;
        function CircumRadius :Single;
@@ -192,7 +196,7 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
        function IsHitLift( const Face_:TPeriFace2D; const T_:TPoint; const MP_:TPoint; const QRank_:Integer ) :Boolean;
        function FindHitLift( const Pos_:TSingle2D; const QRank_:Integer; out Face_:TPeriFace2D; out T_:TPoint ) :Boolean;
        function InsertPoin( const Poin_:TPeriPoin2D; const Face_:TPeriFace2D; const T0_:TPoint ) :Boolean;
-       function TryLocalDelete( const Poin_:TPeriPoin2D ) :Boolean;
+       function RemovePoin( const Poin_:TPeriPoin2D ) :Boolean;
        procedure RemoveSiteAt( const Site_:Integer );
        procedure BuildAll;
      protected
@@ -474,6 +478,20 @@ begin
      with Poin[ I_ ].Pos do Result := TSingle2D.Create( X + O.X * L, Y + O.Y * L );  // 格子上なので厳密
 end;
 
+function TPeriFace2D.CanWeld( const K_:Byte; const Face_:TPeriFace2D; const CornK_:Byte ) :Boolean;
+// 普遍被覆では、同じ頂点の実体でも平行移動像が異なれば別の点なので、頂点の同一性だけでは
+// 足りない。辺の格子変位（平行移動しても不変）まで鏡像で一致することを確かめる
+var
+   AL, AR, BL, BR :Byte;
+begin
+     AL := VertTableInc[ K_     ].L;  AR := VertTableInc[ K_     ].R;  // 辺は両側の面から
+     BL := VertTableInc[ CornK_ ].L;  BR := VertTableInc[ CornK_ ].R;  // 逆向きに見える
+
+     Result := ( Poin[ AL ] = Face_.Poin[ BR ] ) and ( Poin[ AR ] = Face_.Poin[ BL ] )
+           and PtEq( PtSub( CornGrid( AR ), CornGrid( AL ) ),
+                     PtSub( Face_.CornGrid( BL ), Face_.CornGrid( BR ) ) );
+end;
+
 //------------------------------------------------------------------------------
 
 procedure TPeriFace2D.CircumD( out Center_:TDouble2D; out Radius2_:Double );
@@ -702,9 +720,9 @@ begin
      //   F1の辺1 (M10→M11, d=(0,+K)) ↔ F2の辺2 (M01→M,  d=(0,-K))
      //   F1の辺2 (M11→M,   d=(-,-) ) ↔ F2の辺3 (M →M11, d=(+,+))
      //   F1の辺3 (M →M10,  d=(+K,0)) ↔ F2の辺1 (M11→M01, d=(-K,0))
-     F1.Face[ 1 ] := F2;  F1.Corn[ 1 ] := 2;   F2.Face[ 2 ] := F1;  F2.Corn[ 2 ] := 1;
-     F1.Face[ 2 ] := F2;  F1.Corn[ 2 ] := 3;   F2.Face[ 3 ] := F1;  F2.Corn[ 3 ] := 2;
-     F1.Face[ 3 ] := F2;  F1.Corn[ 3 ] := 1;   F2.Face[ 1 ] := F1;  F2.Corn[ 1 ] := 3;
+     F1.Weld( 1, F2, 2 );
+     F1.Weld( 2, F2, 3 );
+     F1.Weld( 3, F2, 1 );
 end;
 
 //------------------------------------------------------------------------------
@@ -911,43 +929,48 @@ var
 //･･･････････････････････････････････････････
      procedure BuildCone;  // 錐張り（通常の Bowyer-Watson。外側は全て生き残る）
      var
-        I, J :Integer;
-        C, D :TPeriFace2D;
+        I :Integer;
+        K :Byte;
+        C :TPeriFace2D;
         NewsF :TArray<TPeriFace2D>;
-        FanDic :TDictionary<Int64,Integer>;
+     //･･････････････････････
+          procedure WeldNews( const Face_:TPeriFace2D; const K_:Byte );  // 辺 K_ の相手を新しい面の中から探して縫う
+          var
+             J :Integer;
+             L :Byte;
+          begin
+               for J := 0 to High( NewsF ) do
+               begin
+                    for L := 1 to 3 do
+                    begin
+                         if Face_.CanWeld( K_, NewsF[ J ], L ) then
+                         begin
+                              Face_.Weld( K_, NewsF[ J ], L );  Exit;
+                         end;
+                    end;
+               end;
+          end;
+     //･･････････････････････
      begin
           NewsF := [];
 
-          FanDic := TDictionary<Int64,Integer>.Create;
-          try
-             for I := 0 to High( Bonds ) do  // 境界辺ごとに新しい面 C = ( B端, p, A端 ) を張る
-             begin                           // （C の辺 3→1 が境界辺 GA→GB と同じ向きで重なる）
-                  with Bonds[ I ] do C := NewFaceG( PB, GB,  Poin_, MP,  PA, GA );
+          for I := 0 to High( Bonds ) do  // 境界辺ごとに新しい面 C = ( B端, p, A端 ) を張る
+          begin                           // （C の辺 3→1 が境界辺 GA→GB と同じ向きで重なる）
+               with Bonds[ I ] do
+               begin
+                    C := NewFaceG( PB, GB,  Poin_, MP,  PA, GA );
 
-                  NewsF := NewsF + [ C ];
+                    C.Weld( 2, OF_, OC );  // 追加点の対辺（辺2）を外側と縫う
+               end;
 
-                  FanDic.Add( GridKey( Bonds[ I ].GB ), I );  // 角1（B端）の格子座標は扇の中で一意
+               NewsF := NewsF + [ C ];
+          end;
 
-                  with Bonds[ I ] do  // 外側と縫う
-                  begin
-                       C.Face[ 2 ]    := OF_;  C.Corn[ 2 ]    := OC;
-                       OF_.Face[ OC ] := C;    OF_.Corn[ OC ] := 2;
-                  end;
-             end;
+          for I := 0 to High( NewsF ) do  // 新しい面どうしを追加点の周りで縫う（頂点と格子変位が鏡像で対応する辺どうし）
+          begin
+               C := NewsF[ I ];
 
-             for I := 0 to High( NewsF ) do  // 追加点の周りの縫合：C の辺 (p → A端) の相手は、A端から始まる面 D
-             begin
-                  C := NewsF[ I ];
-
-                  J := FanDic[ GridKey( Bonds[ I ].GA ) ];  // D の角1の格子座標 = C の A端
-
-                  D := NewsF[ J ];
-
-                  C.Face[ 1 ] := D;  C.Corn[ 1 ] := 3;
-                  D.Face[ 3 ] := C;  D.Corn[ 3 ] := 1;
-             end;
-          finally
-             FanDic.Free;
+               for K := 1 to 3 do if C.Face[ K ] = C then WeldNews( C, K );  // 縫合済みの辺（外側との境界辺・相手から縫われた辺）は飛ばす
           end;
      end;
 //･･･････････････････････････････････････････
@@ -1286,19 +1309,9 @@ var
 
                   for K := 1 to 3 do
                   begin
-                       if PlanK[ I ][ K ] = 1 then
-                       begin
-                            F.Face[ K ] := FInst[ PlanV[ I ][ K ] shr 2 ];
-                            F.Corn[ K ] := PlanV[ I ][ K ] and 3;
-                       end
-                       else
-                       begin
-                            with Bonds[ PlanV[ I ][ K ] ] do
-                            begin
-                                 F.Face[ K ]    := OF_;  F.Corn[ K ]    := OC;
-                                 OF_.Face[ OC ] := F;    OF_.Corn[ OC ] := K;
-                            end;
-                       end;
+                       if PlanK[ I ][ K ] = 1 then F.Weld( K, FInst[ PlanV[ I ][ K ] shr 2 ], PlanV[ I ][ K ] and 3 )  // 新面どうし（計画は両側で整合済み）
+                                              else
+                       with Bonds[ PlanV[ I ][ K ] ] do F.Weld( K, OF_, OC );  // 外側と縫う
                   end;
              end;
 
@@ -1401,7 +1414,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-function TPeriDelaunay2D.TryLocalDelete( const Poin_:TPeriPoin2D ) :Boolean;
+function TPeriDelaunay2D.RemovePoin( const Poin_:TPeriPoin2D ) :Boolean;
 // 局所削除。頂点のひとつのリフト v̂ の周りの星を角の巡回で集め、穴の境界多角形を
 // リフト座標で取り出し、ドロネー耳（他のリンク頂点とその平行移動像を外接円に含まない
 // 耳）で埋める。埋め草の計画と縫合の検証が完成してから初めてメッシュに触れる
@@ -1736,8 +1749,7 @@ begin
              F := FillF[ SewA[ I ] shr 2 ];  C  := SewA[ I ] and 3;
              G := FillF[ SewB[ I ] shr 2 ];  GK := SewB[ I ] and 3;
 
-             F.Face[ C  ] := G;  F.Corn[ C  ] := GK;
-             G.Face[ GK ] := F;  G.Corn[ GK ] := C;
+             F.Weld( C, G, GK );
         end;
 
         for I := 0 to N-1 do  // 生き残る外側の面と縫う
@@ -1748,8 +1760,7 @@ begin
 
                   F := FillF[ BondFill[ I ] shr 2 ];  C := BondFill[ I ] and 3;
 
-                  F.Face[ C ]    := OF_;  F.Corn[ C ]    := OC;
-                  OF_.Face[ OC ] := F;    OF_.Corn[ OC ] := C;
+                  F.Weld( C, OF_, OC );
              end;
         end;
 
@@ -1994,7 +2005,7 @@ begin
      end
      else
      begin
-          if not TryLocalDelete( Poin_ ) then Exit;  // 退化配置で埋め戻せなければ、何も変えずに False（平面版と同じ）
+          if not RemovePoin( Poin_ ) then Exit;  // 退化配置で埋め戻せなければ、何も変えずに False（平面版と同じ）
 
           Inc( _LocalDelN );
 
