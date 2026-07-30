@@ -145,52 +145,52 @@ The implementation is two-phase. ① *Mark*: $\mathcal{C}(p)$ is collected by a 
 ```
 Inheritance
 
-・TTetraPoin3D<TDelaCell3D>                      ：(LUX)
+・TTetraPoin3D<TDelaCell3D>    ：(LUX)
   ┗・TDelaPoin3D
      ┗・TDelaPoin3DInf
 
-・TTetraPoinSet3D<TDelaPoin3D>                   ：(LUX)
+・TTetraPoinSet3D<TDelaPoin3D>    ：(LUX)
   ┗・TDelaPoinSet3D
 
-・TTetraCell3D<TDelaPoin3D,TDelaCell3D>          ：(LUX)
+・TTetraCell3D<TDelaPoin3D,TDelaCell3D>    ：(LUX)
   ┗・TDelaCell3D
 
 ・TTetraCellSet3D<TDelaCell3D,TDelaPoinSet3D>    ：(LUX)
   ┗・TDelaCellSet3D
      ┗・TDelaunay3D
 
-・TControl3D                                     ：(FMX)
+・TControl3D    ：(FMX)
   ┗・TDelaunayLayer
      ┣・TDelaunayEdges
      ┗・TDelaunayVoros
 
-・TViewport3D                                    ：(FMX)
+・TViewport3D    ：(FMX)
   ┗・TDelaunayViewport
 
-・TFrame                                         ：(FMX)
+・TFrame    ：(FMX)
   ┗・TDelaunayViewer
 
 Ownership and references
 
-・TDelaunay3D                                    ：( = TDelaCellSet3D = the cell set )
-  ┣・Poins    :TDelaPoinSet3D
+・TDelaunay3D    ：( = TDelaCellSet3D = the cell set )
+  ┣・Poins :TDelaPoinSet3D
   ┃  ┗・1..* TDelaPoin3D
   ┃     ┣・Pos
-  ┃     ┗・Cell, Corn                          ：anchor
-  ┣・Cells    :TDelaCellSet3D                   ：( = Self )
+  ┃     ┗・Cell, Corn    ：anchor
+  ┣・Cells :TDelaCellSet3D    ：( = Self )
   ┃  ┗・1..* TDelaCell3D
-  ┃     ┣・Poin[0..3]                          ：positive; an infinite cell holds PoinInf here
-  ┃     ┣・Cell[0..3]                          ：neighbours
+  ┃     ┣・Poin[0..3]    ：positive; an infinite cell holds PoinInf here
+  ┃     ┣・Cell[0..3]    ：neighbours
   ┃     ┗・Corn / Bond / Join
-  ┣・PoinInf  :TDelaPoin3DInf                   ：shared by every infinite cell
-  ┗・OnChange :TDelegates                       ：notifies the viewer
+  ┣・PoinInf :TDelaPoin3DInf    ：shared by every infinite cell
+  ┗・OnChange :TDelegates    ：notifies the viewer
 
 ・TDelaunayViewer
   ┗・Viewport :TDelaunayViewport
-     ┣・TDummy                                  ：yaw
-     ┃  ┗・TDummy                              ：pitch
+     ┣・TDummy    ：yaw
+     ┃  ┗・TDummy    ：pitch
      ┃     ┣・TCamera
-     ┃     ┗・TLight                           ：headlight
+     ┃     ┗・TLight    ：headlight
      ┣・TDelaunayEdges
      ┗・TDelaunayVoros
 ```
@@ -199,21 +199,21 @@ Ownership and references
 
 ```
 ・D3/
-  ┣・LUX.Delaunay.D3.pas                  ：unit LUX.Delaunay.D3
-  ┃  ┣・TDelaPoin3D                      ：vertex: Inf, Lift, InSphered
-  ┃  ┣・TDelaPoin3DInf                   ：the point at infinity: Lift ≡ ( 0, 0, 0, 1 )
-  ┃  ┣・TDelaPoinSet3D                   ：vertex set (finite vertices only)
-  ┃  ┣・TDelaCell3D                      ：tetrahedron: InfCorn, Circum, InSphere, IsHitSphere
-  ┃  ┣・TDelaCellSet3D                   ：cell set
-  ┃  ┗・TDelaunay3D                      ：the model: AddPoin / DeletePoin / queries / I-O
+  ┣・LUX.Delaunay.D3.pas    ：unit LUX.Delaunay.D3
+  ┃  ┣・TDelaPoin3D    ：vertex: Inf, Lift, InSphered
+  ┃  ┣・TDelaPoin3DInf    ：the point at infinity: Lift ≡ ( 0, 0, 0, 1 )
+  ┃  ┣・TDelaPoinSet3D    ：vertex set (finite vertices only)
+  ┃  ┣・TDelaCell3D    ：tetrahedron: InfCorn, Circum, InSphere, IsHitSphere
+  ┃  ┣・TDelaCellSet3D    ：cell set
+  ┃  ┗・TDelaunay3D    ：the model: AddPoin / DeletePoin / queries / I-O
   ┣・LUX.Delaunay.D3.Viewer.pas / .fmx    ：unit LUX.Delaunay.D3.Viewer
-  ┃  ┣・TDelaunayLayer                   ：layer base: mesh buffer + material, Render
-  ┃  ┣・TDelaunayEdges                   ：Delaunay edges as polygonal tubes
-  ┃  ┣・TDelaunayVoros                   ：Voronoi edges as prisms and cones
-  ┃  ┣・TDelaunayViewport                ：the internal TViewport3D
-  ┃  ┗・TDelaunayViewer                  ：the TFrame (orbit rig, headlight, picking)
-  ┣・README.md                            ：this document
-  ┗・ja/README.md                         ：Japanese translation
+  ┃  ┣・TDelaunayLayer    ：layer base: mesh buffer + material, Render
+  ┃  ┣・TDelaunayEdges    ：Delaunay edges as polygonal tubes
+  ┃  ┣・TDelaunayVoros    ：Voronoi edges as prisms and cones
+  ┃  ┣・TDelaunayViewport    ：the internal TViewport3D
+  ┃  ┗・TDelaunayViewer    ：the TFrame (orbit rig, headlight, picking)
+  ┣・README.md    ：this document
+  ┗・ja/README.md    ：Japanese translation
 ```
 
 Built on the TetraFlip mesh layers of [LUX](https://github.com/LUXOPHIA/LUX) (`LUX.Data.Model.TetraFlip.core`, `LUX.Data.Model.TetraFlip.D3`), which own the points and cells and provide the connectivity, the corner and rotation tables (`VertTable` / `BondTable`), face gluing (`Weld` / `CanWeld`), the adjacency check (`CheckCells`) and the iteration. `LUX.Delaunay.D3` adds only what is Delaunay-specific; the typing layer of TetraFlip is parameterised with the derived classes themselves.

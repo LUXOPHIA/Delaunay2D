@@ -120,34 +120,34 @@ Point location is *jump & walk* [6]: draw $m = n^{1/(d+1)}$ random sites, start 
 Base library
 
 ・LUX
-  ┣・LUX.D2 / LUX.D3 / LUX.D4      ：vectors
-  ┣・LUX.Data.Model.TriFlip.*      ：2D mesh model
+  ┣・LUX.D2 / LUX.D3 / LUX.D4    ：vectors
+  ┣・LUX.Data.Model.TriFlip.*    ：2D mesh model
   ┗・LUX.Data.Model.TetraFlip.*    ：3D mesh model
 
 Packages built on LUX   (each model package, then its viewer)
 
-・LUX.Delaunay.D2                   ：∞-vertex, E²
+・LUX.Delaunay.D2    ：∞-vertex, E²
   ┣・TDelaunay2D
   ┣・TDelaPoin2D
   ┣・TDelaPoin2DInf
   ┣・TDelaFace2D
   ┗・LUX.Delaunay.D2.Viewer
-     ┗・TDelaunayViewer            ：(LUX.CG2D / Skia)
+     ┗・TDelaunayViewer    ：(LUX.CG2D / Skia)
 
-・LUX.Delaunay.D2.Periodic          ：torus, minimal representation, T²
+・LUX.Delaunay.D2.Periodic    ：torus, minimal representation, T²
   ┣・TPeriDelaunay2D
   ┣・TPeriPoin2D
   ┣・TPeriFace2D
   ┗・LUX.Delaunay.D2.Periodic.Viewer
-     ┗・TPeriDelaunayViewer        ：(LUX.CG2D / Skia)
+     ┗・TPeriDelaunayViewer    ：(LUX.CG2D / Skia)
 
-・LUX.Delaunay.D3                   ：∞-vertex, E³
+・LUX.Delaunay.D3    ：∞-vertex, E³
   ┣・TDelaunay3D
   ┣・TDelaPoin3D
   ┣・TDelaPoin3DInf
   ┣・TDelaCell3D
   ┗・LUX.Delaunay.D3.Viewer
-     ┗・TDelaunayViewer            ：(FMX TViewport3D)
+     ┗・TDelaunayViewer    ：(FMX TViewport3D)
 ```
 
 `TDelaunay2D` and `TPeriDelaunay2D` are both derived from the TriFlip triangle-mesh layers of [LUX](https://github.com/LUXOPHIA/LUX); `TDelaunay3D` is derived from the TetraFlip tetrahedral-mesh layers. Those layers own the points and cells and provide the connectivity (`Poin` / `Face` or `Cell` / `Corn` / `Bond`), the corner-rotation tables, the facet gluing and the iteration; each `LUX.Delaunay.*` unit adds only what is Delaunay-specific.
@@ -156,21 +156,21 @@ Packages built on LUX   (each model package, then its viewer)
 
 ```
 ・LUX.Delaunay/
-  ┣・README.md                                          ：this document
-  ┣・ja/README.md                                       ：Japanese translation
-  ┣・LICENSE                                            ：MIT
-  ┣・D2/                                                ：2D Euclidean plane
-  ┃  ┣・LUX.Delaunay.D2.pas                            ：TDelaunay2D — triangulation of E²
-  ┃  ┣・LUX.Delaunay.D2.Viewer.pas / .fmx              ：TDelaunayViewer — Skia 2D frame
-  ┃  ┣・README.md , ja/README.md                       ：package documentation
-  ┃  ┗・Periodic/                                      ：2D flat torus
-  ┃     ┣・LUX.Delaunay.D2.Periodic.pas                ：TPeriDelaunay2D — triangulation of T²
-  ┃     ┣・LUX.Delaunay.D2.Periodic.Viewer.pas/.fmx    ：TPeriDelaunayViewer — Skia 2D frame
-  ┃     ┗・README.md , ja/README.md                    ：package documentation
-  ┗・D3/                                                ：3D Euclidean space
-     ┣・LUX.Delaunay.D3.pas                             ：TDelaunay3D — tetrahedralization of E³
-     ┣・LUX.Delaunay.D3.Viewer.pas / .fmx               ：TDelaunayViewer — Viewport3D frame
-     ┗・README.md , ja/README.md                        ：package documentation
+  ┣・README.md    ：this document
+  ┣・ja/README.md    ：Japanese translation
+  ┣・LICENSE    ：MIT
+  ┣・D2/    ：2D Euclidean plane
+  ┃  ┣・LUX.Delaunay.D2.pas    ：TDelaunay2D — triangulation of E²
+  ┃  ┣・LUX.Delaunay.D2.Viewer.pas / .fmx    ：TDelaunayViewer — Skia 2D
+  ┃  ┣・README.md , ja/README.md    ：package documentation
+  ┃  ┗・Periodic/    ：2D flat torus
+  ┃     ┣・LUX.Delaunay.D2.Periodic.pas    ：TPeriDelaunay2D — T²
+  ┃     ┣・LUX.Delaunay.D2.Periodic.Viewer.pas/.fmx    ：TPeriDelaunayViewer
+  ┃     ┗・README.md , ja/README.md    ：package documentation
+  ┗・D3/    ：3D Euclidean space
+     ┣・LUX.Delaunay.D3.pas    ：TDelaunay3D — tetrahedralization of E³
+     ┣・LUX.Delaunay.D3.Viewer.pas / .fmx    ：TDelaunayViewer — Viewport3D
+     ┗・README.md , ja/README.md    ：package documentation
 ```
 
 ### 3.3 Dependencies
