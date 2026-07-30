@@ -118,23 +118,23 @@ Nearest-neighbor search (`FindNearPoin`) starts from the nearest vertex of the l
 
 ```
 [Composition]
-・TForm1 (Main.pas / Main.fmx)    ：Application
-  ┣・_Delaunay :TDelaunay2D    ：model, owned by the form (LUX.Delaunay.D2)
-  ┗・Viewer1 :TDelaunayViewer (TFrame)    ：Skia view (LUX.Delaunay.D2.Viewer)
-     ┗・_Layers :TCGLayers    ：LUX.CG2D scene
-        ┣・TDelaunayTrias    ：triangles
-        ┣・TDelaunayCircs    ：circumcircles
-        ┣・TDelaunayVolos    ：Voronoi
-        ┣・TDelaunayPoins    ：vertices
+・TForm1 (Main.pas / Main.fmx)          ･･･ Application
+  ┣・_Delaunay :TDelaunay2D            ･･･ model (LUX.Delaunay.D2)
+  ┗・Viewer1 :TDelaunayViewer (TFrame) ･･･ Skia view (LUX.Delaunay.D2.Viewer)
+     ┗・_Layers :TCGLayers             ･･･ LUX.CG2D scene
+        ┣・TDelaunayTrias              ･･･ triangles
+        ┣・TDelaunayCircs              ･･･ circumcircles
+        ┣・TDelaunayVolos              ･･･ Voronoi
+        ┣・TDelaunayPoins              ･･･ vertices
         ┗・TCGLayer
-           ┗・TCGCamera    ：viewpoint
+           ┗・TCGCamera                ･･･ viewpoint
 
 [Call and notification flow]
 ・TForm1
-  ┗・AddPoin / DeletePoin / Clear    ：form → model
+  ┗・AddPoin / DeletePoin / Clear      ･･･ form → model
      ┗・TDelaunay2D
-        ┗・OnChange (multicast)    ：model → view
-           ┗・TDelaunayViewer    ：holds the model; rebuilds its scene
+        ┗・OnChange (multicast)        ･･･ model → view
+           ┗・TDelaunayViewer          ･･･ holds the model; rebuilds its scene
 
 [Inheritance: TriFlip mesh layer (LUX) → Delaunay classes]
 ・TTriPoin2D<F>
@@ -154,15 +154,15 @@ Nearest-neighbor search (`FindNearPoin`) starts from the nearest vertex of the l
 The model publishes structural changes through the multicast delegate `TDelaunay2D.OnChange`; the viewer subscribes and rebuilds its scene lazily — the rebuild is deferred to just before `Paint` and runs at most once per frame, bracketed by `BeginUpdate` / `EndUpdate`. Vertex/face connectivity (`Poin` / `Face` / `Corn`), the cyclic tables (`VertTableInc` / `VertTableDec`) and ownership are provided by the generic TriFlip mesh layer; the Delaunay classes add only the lift, the predicate, the homogeneous circumcenter and the algorithms.
 
 ```
-・Delaunay2D.dpr / .dproj    ：application project (FMX, Win32 / Win64)
-・Main.pas / Main.fmx    ：TForm1: thin form; no drawing code
-・_LIBRARY\LUXOPHIA\    ：git-subtree copies of separate library repos
-  ┣・LUX\    ：base library: vectors, lists/trees, TriFlip mesh model
-  ┣・LUX.CG2D\    ：2D scene graph on Skia (TCGLayer, TCGCamera, shapes)
+・Delaunay2D.dpr / .dproj                   ･･･ FMX application (Win32/Win64)
+・Main.pas / Main.fmx                       ･･･ TForm1: thin form; no drawing
+・_LIBRARY\LUXOPHIA\                        ･･･ git-subtree library copies
+  ┣・LUX\                                  ･･･ base library, TriFlip mesh model
+  ┣・LUX.CG2D\                             ･･･ 2D scene graph on Skia
   ┗・LUX.Delaunay\
-     ┣・D2\LUX.Delaunay.D2.pas    ：TDelaunay2D and companion classes (model)
-     ┣・D2\LUX.Delaunay.D2.Viewer.pas/.fmx    ：TDelaunayViewer frame (view)
-     ┗・D2\Periodic\, D3\    ：bundled with the subtree; unused by this demo
+     ┣・D2\LUX.Delaunay.D2.pas             ･･･ TDelaunay2D classes (model)
+     ┣・D2\LUX.Delaunay.D2.Viewer.pas/.fmx ･･･ TDelaunayViewer frame (view)
+     ┗・D2\Periodic\, D3\                  ･･･ bundled; unused by this demo
 ```
 
 ## 4. Usage / Controls
