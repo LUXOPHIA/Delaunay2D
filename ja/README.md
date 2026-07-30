@@ -118,26 +118,23 @@ C_W = 2\begin{vmatrix} x_1 & y_1 & w_1 \\ x_2 & y_2 & w_2 \\ x_3 & y_3 & w_3 \en
 
 ```
 [Composition]
-・TForm1 (Main.pas / Main.fmx)              ：Application
-  ┣・_Delaunay : TDelaunay2D               ：model, owned by the form  (Model: LUX.Delaunay.D2)
-  ┃                                          = TDelaFaceSet2D + algorithms
-  ┃                                          PoinInf : TDelaPoin2DInf
-  ┗・Viewer1 : TDelaunayViewer (TFrame)    ：view, on the form  (View: LUX.Delaunay.D2.Viewer)
-                                              Paint via Skia (ISkCanvas)
-     ┗・_Layers : TCGLayers                ：LUX.CG2D scene
-        ┣・TDelaunayTrias                  ：triangles
-        ┣・TDelaunayCircs                  ：circumcircles
-        ┣・TDelaunayVolos                  ：Voronoi
-        ┣・TDelaunayPoins                  ：vertices
+・TForm1 (Main.pas / Main.fmx)    ：Application
+  ┣・_Delaunay :TDelaunay2D    ：model, owned by the form (LUX.Delaunay.D2)
+  ┗・Viewer1 :TDelaunayViewer (TFrame)    ：Skia view (LUX.Delaunay.D2.Viewer)
+     ┗・_Layers :TCGLayers    ：LUX.CG2D scene
+        ┣・TDelaunayTrias    ：triangles
+        ┣・TDelaunayCircs    ：circumcircles
+        ┣・TDelaunayVolos    ：Voronoi
+        ┣・TDelaunayPoins    ：vertices
         ┗・TCGLayer
-           ┗・TCGCamera                    ：viewpoint
+           ┗・TCGCamera    ：viewpoint
 
 [Call and notification flow]
 ・TForm1
-  ┗・AddPoin / DeletePoin / Clear          ：form → model
+  ┗・AddPoin / DeletePoin / Clear    ：form → model
      ┗・TDelaunay2D
-        ┗・OnChange (multicast)            ：model → view
-           ┗・TDelaunayViewer              ：holds the model; rebuilds its scene
+        ┗・OnChange (multicast)    ：model → view
+           ┗・TDelaunayViewer    ：holds the model; rebuilds its scene
 
 [Inheritance: TriFlip mesh layer (LUX) → Delaunay classes]
 ・TTriPoin2D<F>
@@ -157,16 +154,15 @@ C_W = 2\begin{vmatrix} x_1 & y_1 & w_1 \\ x_2 & y_2 & w_2 \\ x_3 & y_3 & w_3 \en
 モデルは構造の変化を多播デリゲート `TDelaunay2D.OnChange` で発行し、ビューアはそれを購読してシーンを遅延再構築します — 再構築は `Paint` の直前まで遅延され、`BeginUpdate` / `EndUpdate` で束ねて1フレームに最大1回だけ走ります。頂点・面の接続（`Poin` / `Face` / `Corn`）、巡回表（`VertTableInc` / `VertTableDec`）、所有はジェネリックな TriFlip メッシュ層が提供し、ドロネー側のクラスはリフト・述語・同次外心・アルゴリズムだけを加えます。
 
 ```
-・Delaunay2D.dpr / .dproj                      ：application project (FMX, Win32 / Win64)
-・Main.pas / Main.fmx                          ：TForm1: thin form; no drawing code
-・_LIBRARY\LUXOPHIA\                           ：git-subtree copies of separate library repos
-  ┣・LUX\                                     ：base library: vectors (TSingle2D, TDouble3D, ...),
-  ┃                                             lists/trees, and the TriFlip triangle-mesh model
-  ┣・LUX.CG2D\                                ：2D scene graph on Skia (TCGLayer, TCGCamera, shapes)
+・Delaunay2D.dpr / .dproj    ：application project (FMX, Win32 / Win64)
+・Main.pas / Main.fmx    ：TForm1: thin form; no drawing code
+・_LIBRARY\LUXOPHIA\    ：git-subtree copies of separate library repos
+  ┣・LUX\    ：base library: vectors, lists/trees, TriFlip mesh model
+  ┣・LUX.CG2D\    ：2D scene graph on Skia (TCGLayer, TCGCamera, shapes)
   ┗・LUX.Delaunay\
-     ┣・D2\LUX.Delaunay.D2.pas                ：TDelaunay2D and companion classes (model)
+     ┣・D2\LUX.Delaunay.D2.pas    ：TDelaunay2D and companion classes (model)
      ┣・D2\LUX.Delaunay.D2.Viewer.pas/.fmx    ：TDelaunayViewer frame (view)
-     ┗・D2\Periodic\, D3\                     ：bundled with the subtree; unused by this demo
+     ┗・D2\Periodic\, D3\    ：bundled with the subtree; unused by this demo
 ```
 
 ## 4. 使い方／操作
