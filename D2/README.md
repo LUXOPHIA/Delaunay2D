@@ -159,24 +159,24 @@ The implementation is two-phase. ① *Mark*: $\mathcal{C}(p)$ is collected by a 
 ```
 Inheritance
 
-・TTriPoin2D<TDelaFace2D>                      ：(LUX)
+・TTriPoin2D<TDelaFace2D>    ：(LUX)
   ┗・TDelaPoin2D
      ┗・TDelaPoin2DInf
 
-・TTriPoinSet2D<TDelaPoin2D>                   ：(LUX)
+・TTriPoinSet2D<TDelaPoin2D>    ：(LUX)
   ┗・TDelaPoinSet2D
 
-・TTriFace2D<TDelaPoin2D,TDelaFace2D>          ：(LUX)
+・TTriFace2D<TDelaPoin2D,TDelaFace2D>    ：(LUX)
   ┗・TDelaFace2D
 
 ・TTriFaceSet2D<TDelaFace2D,TDelaPoinSet2D>    ：(LUX)
   ┗・TDelaFaceSet2D
      ┗・TDelaunay2D
 
-・TFrame                                       ：(FMX)
+・TFrame    ：(FMX)
   ┗・TDelaunayViewer
 
-・TCGLayer                                     ：(LUX.CG2D)
+・TCGLayer    ：(LUX.CG2D)
   ┣・TDelaunayTrias
   ┣・TDelaunayCircs
   ┣・TDelaunayVolos
@@ -184,25 +184,25 @@ Inheritance
 
 Ownership and references
 
-・TDelaunay2D                                  ：( = TDelaFaceSet2D = the face set )
-  ┣・Poins    :TDelaPoinSet2D
+・TDelaunay2D    ：( = TDelaFaceSet2D = the face set )
+  ┣・Poins :TDelaPoinSet2D
   ┃  ┗・1..* TDelaPoin2D
   ┃     ┣・Pos
-  ┃     ┗・Face, Corn                        ：anchor
-  ┣・Faces    :TDelaFaceSet2D                 ：( = Self )
+  ┃     ┗・Face, Corn    ：anchor
+  ┣・Faces :TDelaFaceSet2D    ：( = Self )
   ┃  ┗・1..* TDelaFace2D
-  ┃     ┣・Poin[1..3]                        ：CCW; an infinite face holds PoinInf here
-  ┃     ┣・Face[1..3]                        ：neighbours
+  ┃     ┣・Poin[1..3]    ：CCW; an infinite face holds PoinInf here
+  ┃     ┣・Face[1..3]    ：neighbours
   ┃     ┗・Corn[1..3]
-  ┣・PoinInf  :TDelaPoin2DInf                 ：shared by every infinite face
-  ┗・OnChange :TDelegates                     ：notifies the viewer
+  ┣・PoinInf :TDelaPoin2DInf    ：shared by every infinite face
+  ┗・OnChange :TDelegates    ：notifies the viewer
 
 ・TDelaunayViewer
-  ┗・Layers :TCGLayers                        ：creation order = drawing order (bottom to top)
-     ┣・TDelaunayTrias                        ：bottom
+  ┗・Layers :TCGLayers    ：creation order = drawing order (bottom to top)
+     ┣・TDelaunayTrias    ：bottom
      ┣・TDelaunayCircs
      ┣・TDelaunayVolos
-     ┣・TDelaunayPoins                        ：top
+     ┣・TDelaunayPoins    ：top
      ┗・TCGCamera layer
 ```
 
@@ -210,19 +210,19 @@ Ownership and references
 
 ```
 ・D2/
-  ┣・LUX.Delaunay.D2.pas                           ：unit LUX.Delaunay.D2
-  ┃  ┣・TDelaPoin2D                               ：vertex: Inf, Lift, InCircled
-  ┃  ┣・TDelaPoin2DInf                            ：the point at infinity: Lift ≡ ( 0, 0, 1 )
-  ┃  ┣・TDelaPoinSet2D                            ：vertex set (finite vertices only)
-  ┃  ┣・TDelaFace2D                               ：triangle: InfCorn, Circum, InCircle, IsHitCircle
-  ┃  ┣・TDelaFaceSet2D                            ：face set
-  ┃  ┗・TDelaunay2D                               ：the model: AddPoin / DeletePoin / queries / I-O
-  ┣・LUX.Delaunay.D2.Viewer.pas / .fmx             ：unit LUX.Delaunay.D2.Viewer
-  ┃  ┣・TDelaunayTrias / Circs / Volos / Poins    ：scene layers on the LUX.CG2D scene graph
-  ┃  ┗・TDelaunayViewer                           ：the TFrame
-  ┣・README.md                                     ：this document
-  ┣・ja/README.md                                  ：Japanese translation
-  ┗・Periodic/                                     ：LUX.Delaunay.D2.Periodic — the flat-torus variant
+  ┣・LUX.Delaunay.D2.pas    ：unit LUX.Delaunay.D2
+  ┃  ┣・TDelaPoin2D    ：vertex: Inf, Lift, InCircled
+  ┃  ┣・TDelaPoin2DInf    ：the point at infinity: Lift ≡ ( 0, 0, 1 )
+  ┃  ┣・TDelaPoinSet2D    ：vertex set (finite vertices only)
+  ┃  ┣・TDelaFace2D    ：triangle: InfCorn, Circum, InCircle, IsHitCircle
+  ┃  ┣・TDelaFaceSet2D    ：face set
+  ┃  ┗・TDelaunay2D    ：the model: AddPoin / DeletePoin / queries / I-O
+  ┣・LUX.Delaunay.D2.Viewer.pas / .fmx    ：unit LUX.Delaunay.D2.Viewer
+  ┃  ┣・TDelaunayTrias / Circs / Volos / Poins    ：LUX.CG2D scene layers
+  ┃  ┗・TDelaunayViewer    ：the TFrame
+  ┣・README.md    ：this document
+  ┣・ja/README.md    ：Japanese translation
+  ┗・Periodic/    ：LUX.Delaunay.D2.Periodic — the flat-torus variant
 ```
 
 Built on the TriFlip mesh layers of [LUX](https://github.com/LUXOPHIA/LUX) (`LUX.Data.Model.TriFlip.core`, `LUX.Data.Model.TriFlip.D2`), which own the points and faces and provide the connectivity, the corner tables (`VertTableInc` / `VertTableDec`), edge welding, the adjacency check (`CheckEdges`) and the iteration. `LUX.Delaunay.D2` adds only what is Delaunay-specific; the typing layer of TriFlip is parameterised with the derived classes themselves.
