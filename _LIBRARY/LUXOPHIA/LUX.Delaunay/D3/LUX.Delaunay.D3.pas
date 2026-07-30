@@ -36,7 +36,9 @@
 //   星型の穴が開く。穴の境界（リンク）の頂点だけから成る小さなドロネー図を、同じ
 //   集合の中の独立した成分として逐次添加法で作り（入れ子の TDelaunay3D は作らない）、
 //   その中から穴を埋める胞 ―― 境界面を鏡像の向きで貼り合わせられる胞（CanWeld）から、
-//   境界を越えずに届く胞 ―― を切り出して、穴の縁に縫い付ける（Weld）。埋め草の
+//   境界を越えずに届く胞 ―― を切り出して、穴の縁に縫い付ける（Weld）。切り出しは位相的な
+//   塗り広げで行う（「削除点を空球に含む胞」という述語だけでも一般の配置では同じ集合を与えるが、
+//   共球の退化では削除点がちょうど球面上に乗る胞が穴の中に現れるため、判定が破れる）。埋め草の
 //   切り出しも縫い付けも組合せ的な検査だけで確定し、フリップの探索を含まない。
 //   検査に通らない退化配置では、元の分割を一切壊さずに False を返す。
 // ・追加も削除も、失敗は戻り値で表す。AddPoin は追加できなければ（重複・最初の3点の
@@ -171,6 +173,7 @@ type //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
        function JumpPoin( const Pos_:TSingle3D ) :TDelaPoin3D;
        function ScanSphereCell( const Pos_:TSingle3D ) :TDelaCell3D;
        procedure CollectStar( const Poin_:TDelaPoin3D; var Cells_:TArray<TDelaCell3D> );
+       function RemovePoin( const Poin_:TDelaPoin3D ) :Boolean;
      protected
        ///// M E T H O D
        function NewPoin( const Pos_:TSingle3D ) :TDelaPoin3D;
@@ -476,11 +479,27 @@ procedure TDelaunay3D.InsertPoin( const Poin_:TDelaPoin3D; const Cell_:TDelaCell
 var
    Star :TArray<TDelaCell3D>;  // キャビティ（塗った胞）
    News :TArray<TDelaCell3D>;  // 境界面に張った新しい胞 ( Poin_, F1, F3, F2 )
-   I, J :Integer;
+   I :Integer;
    K, GK :Byte;
-   CA, CB :Shortint;
-   T, G, C, D :TDelaCell3D;
-   A, B :TDelaPoin3D;
+   T, G, C :TDelaCell3D;
+//･･･････････････････････････････････････････
+     procedure WeldNews( const Cell_:TDelaCell3D; const K_:Byte );  // 面 K_ の相手を新しい胞の中から探して縫う
+     var
+        J :Integer;
+        L :Byte;
+     begin
+          for J := 0 to High( News ) do
+          begin
+               for L := 0 to 3 do
+               begin
+                    if Cell_.CanWeld( K_, News[ J ], L ) then
+                    begin
+                         Cell_.Weld( K_, News[ J ], L );  Exit;
+                    end;
+               end;
+          end;
+     end;
+//･･･････････････････････････････････････････
 begin
      Cell_.Flag := 1;  Star := [ Cell_ ];  // 呼び出し側の契約: Cell_ は追加点を球に含む
 
@@ -524,34 +543,11 @@ begin
           end;
      end;
 
-     for I := 0 to High( News ) do  // 新しい胞どうしを追加点の周りで縫う。
-     begin                          // 側面 K（追加点を含む面）の相手は、残る2頂点 A, B を共有する胞
+     for I := 0 to High( News ) do  // 新しい胞どうしを追加点の周りで縫う（頂点が鏡像で対応する面どうし）
+     begin
           C := News[ I ];
 
-          for K := 1 to 3 do
-          begin
-               if C.Cell[ K ] <> C then Continue;  // 縫合済み（Weld は両側を張る）
-
-               A := C.Poin[ K mod 3 + 1 ];          // 側面 K の頂点 = { Poin_, A, B }（1..3 のうち K 以外の2つ）
-               B := C.Poin[ ( K + 1 ) mod 3 + 1 ];
-
-               for J := 0 to High( News ) do
-               begin
-                    D := News[ J ];
-
-                    if D = C then Continue;
-
-                    CA := D.CornOf( A );
-                    CB := D.CornOf( B );
-
-                    if ( CA > 0 ) and ( CB > 0 ) then  // A も B も持つ胞は境界面の隣だけ
-                    begin
-                         C.Weld( K, D, 6 - CA - CB );  // D の残る側面が合わせ面
-
-                         Break;
-                    end;
-               end;
-          end;
+          for K := 0 to 3 do if C.Cell[ K ] = C then WeldNews( C, K );  // 縫合済みの面（外側との境界面・相手から縫われた面）は飛ばす
      end;
 
      for I := 0 to High( Star ) do Star[ I ].Free;  // マークは胞ごと消える
@@ -625,6 +621,287 @@ begin
      end;
 
      for C in Cells_ do C.Flag := 0;  // フラグは常に 0 へ戻す（追加処理との共用）
+end;
+
+//------------------------------------------------------------------------------
+
+function TDelaunay3D.RemovePoin( const Poin_:TDelaPoin3D ) :Boolean;
+type
+    TBond = record            // 穴の境界面と、その外側の胞（フック）・内側の埋め草
+      HC :TDelaCell3D;  HK :Byte;
+      FC :TDelaCell3D;  FK :Byte;
+    end;
+var
+   Star  :TArray<TDelaCell3D>;   // Poin_ の星（取り除くと星型の穴が開く）
+   Bonds :TArray<TBond>;         // 穴の境界（星の胞ごとに、Poin_ の対面が1枚）
+   Links :TArray<TDelaPoin3D>;   // 有限のリンク頂点（重複なし）
+   Minis :TArray<TDelaCell3D>;   // リンク頂点だけの小さなドロネー図（同じ集合の中の独立した成分）
+   Hull  :Boolean;               // 穴が凸包に接しているか（リンクに無限遠頂点が現れるか）
+   AC :TDelaCell3D;    AK :Byte; // 無限遠頂点のアンカーの控え
+   C :TDelaCell3D;
+   I, S :Integer;
+//･･･････････････････････････････････････････
+     function IsSeam( const Cell_:TDelaCell3D; const K_:Byte ) :Boolean;  // 胞のこの面は縫い目（境界面の内側）か
+     var
+        I :Integer;
+     begin
+          for I := 0 to High( Bonds ) do with Bonds[ I ] do if ( FC = Cell_ ) and ( FK = K_ ) then Exit( True );
+
+          Result := False;
+     end;
+//･･･････････････････････････････････････････
+     procedure CollectHole;  // 星・穴の境界・リンク頂点を集める（構造を読むだけで、何も壊さない）
+     var
+        C :TDelaCell3D;
+        K :Byte;
+        B :TBond;
+        P :TDelaPoin3D;
+        J :Integer;
+        Known :Boolean;
+     begin
+          CollectStar( Poin_, Star );  // 頂点のアンカーから面渡りで広がる
+
+          for C in Star do
+          begin
+               K := Byte( C.CornOf( Poin_ ) );
+
+               B.HC := C.Cell[ K ];  B.HK := C.Corn[ K ];  // Poin_ の対面の外側
+               B.FC := nil        ;  B.FK := 0          ;
+
+               Bonds := Bonds + [ B ];
+
+               for K := 0 to 3 do  // リンク頂点（削除点・無限遠頂点・重複は除く）
+               begin
+                    P := C.Poin[ K ];
+
+                    if P = Poin_ then Continue;
+
+                    if P.Inf then begin  Hull := True;  Continue;  end;
+
+                    Known := False;
+
+                    for J := 0 to High( Links ) do if Links[ J ] = P then begin  Known := True;  Break;  end;
+
+                    if not Known then Links := Links + [ P ];
+               end;
+          end;
+     end;
+//･･･････････････････････････････････････････
+     function MiniCells :TArray<TDelaCell3D>;  // 小さなドロネー図の全胞（成分の接続を辿って集める）
+     var
+        I :Integer;
+        K :Byte;
+        N :TDelaCell3D;
+     begin
+          Result := [ Links[ 0 ].Cell ];  // 種の頂点のアンカーは、胞が張り直されるたびに更新されて常に成分内を指す
+
+          Result[ 0 ].Flag := 1;
+
+          I := 0;
+          while I < Length( Result ) do
+          begin
+               for K := 0 to 3 do
+               begin
+                    N := Result[ I ].Cell[ K ];
+
+                    if N.Flag = 0 then begin  N.Flag := 1;  Result := Result + [ N ];  end;
+               end;
+
+               Inc( I );
+          end;
+
+          for I := 0 to High( Result ) do Result[ I ].Flag := 0;  // 旗は元へ戻す
+     end;
+//･･･････････････････････････････････････････
+     function BuildMini( const S_:Integer ) :Boolean;  // リンク頂点だけの小さなドロネー図を、同じ集合の中に逐次添加法で作る
+     var                                               // （入れ子の TDelaunay3D は作らない。胞は同じ集合が所有する別成分になる）
+        I :Integer;
+        C, H :TDelaCell3D;
+        Rest :TArray<TDelaPoin3D>;
+        Progress :Boolean;
+     begin
+          SeedCells( Links[ 0 ], Links[ 1 ], Links[ S_ ] );
+
+          Rest := Copy( Links );  Delete( Rest, S_, 1 );  Delete( Rest, 0, 2 );  // 種の3点を除いた残り（S_ >= 2 なので先に抜く）
+
+          repeat  // 挿入が新たな胞を張ると、種の平面上などで見送られた頂点が入れるようになるので、
+                  // 挿入が起きなくなるまで繰り返す（有界なローカル構築の順序調整）
+                Progress := False;
+
+                I := 0;
+                while I <= High( Rest ) do
+                begin
+                     H := nil;  // 位置検索は総当たりでよい（成分はリンクの大きさしかない）
+
+                     for C in MiniCells do if C.IsHitSphere( Rest[ I ].Pos ) then begin  H := C;  Break;  end;
+
+                     if H = nil then Inc( I )
+                     else
+                     begin
+                          InsertPoin( Rest[ I ], H );
+
+                          Delete( Rest, I, 1 );  Progress := True;
+                     end;
+                end;
+          until not Progress;
+
+          Minis := MiniCells;
+
+          Result := Length( Rest ) = 0;  // 退化（どの外接球にも入らない頂点が残った）→ 埋め戻し不能
+     end;
+//･･･････････････････････････････････････････
+     function MatchSeams :Boolean;  // 穴の境界面に、鏡像の向きで貼り合わせられる胞（＝穴の側の胞）を探す
+     var
+        I, J :Integer;
+        K :Byte;
+        C :TDelaCell3D;
+     begin
+          Result := False;
+
+          for I := 0 to High( Bonds ) do
+          begin
+               with Bonds[ I ] do
+               begin
+                    for J := 0 to High( Minis ) do
+                    begin
+                         C := Minis[ J ];
+
+                         for K := 0 to 3 do  // 面を共有する2胞のうち、鏡像で貼り合う側だけが通る
+                         begin
+                              if C.CanWeld( K, HC, HK ) then begin  FC := C;  FK := K;  end;
+                         end;
+                    end;
+
+                    if FC = nil then Exit;  // 境界面が現れない（共球の同数で別の対角が選ばれた等）→ 埋め戻し不能
+               end;
+          end;
+
+          for I := 1 to High( Bonds ) do  // 同じ縫い目が2枚の境界面に割り当たる退化（潰れた穴）も埋め戻し不能
+          begin
+               for J := 0 to I-1 do
+               begin
+                    if ( Bonds[ I ].FC = Bonds[ J ].FC ) and ( Bonds[ I ].FK = Bonds[ J ].FK ) then Exit;
+               end;
+          end;
+
+          Result := True;
+     end;
+//･･･････････････････････････････････････････
+     function FloodFills :Boolean;  // 埋め草から縫い目を越えずに広がり（旗で印を付ける）、閉包の境界が穴の境界と一致することを確かめる
+     var
+        I :Integer;
+        K, K2 :Byte;
+        C, N :TDelaCell3D;
+        Fills :TArray<TDelaCell3D>;
+     begin
+          Result := False;
+
+          Fills := [];
+
+          for I := 0 to High( Bonds ) do
+          begin
+               C := Bonds[ I ].FC;
+
+               if C.Flag = 0 then begin  C.Flag := 1;  Fills := Fills + [ C ];  end;
+          end;
+
+          I := 0;
+          while I < Length( Fills ) do
+          begin
+               C := Fills[ I ];  Inc( I );
+
+               for K := 0 to 3 do
+               begin
+                    if IsSeam( C, K ) then Continue;  // 縫い目は越えない
+
+                    N := C.Cell[ K ];
+
+                    if N.Flag = 0 then begin  N.Flag := 1;  Fills := Fills + [ N ];  end;
+               end;
+          end;
+
+          for I := 0 to High( Fills ) do  // 無限遠胞が埋め草になるのは、穴が凸包に接しているときだけ
+          begin
+               if ( Fills[ I ].InfCorn >= 0 ) and not Hull then Exit;
+          end;
+
+          for I := 0 to High( Bonds ) do  // 縫い目の外側は、捨てられる胞か、それ自身も縫い目（穴が自分と接する退化）で
+          begin                           // なければならない ―― これで閉包の境界が穴の境界とちょうど一致する
+               with Bonds[ I ] do
+               begin
+                    N  := FC.Cell[ FK ];
+                    K2 := FC.Corn[ FK ];
+               end;
+
+               if ( N.Flag <> 0 ) and not IsSeam( N, K2 ) then Exit;
+          end;
+
+          Result := True;
+     end;
+//･･･････････････････････････････････････････
+begin
+     Result := False;
+
+     Hull := False;
+
+     CollectHole;
+
+     if Length( Bonds ) = 2 then  // 星が2胞（鏡像対）：境界面2枚は同じ面の裏表 → 外側どうしを直接貼り合わせる
+     begin
+          if not Bonds[ 0 ].HC.CanWeld( Bonds[ 0 ].HK, Bonds[ 1 ].HC, Bonds[ 1 ].HK ) then Exit;
+
+          Bonds[ 0 ].HC.Weld( Bonds[ 0 ].HK, Bonds[ 1 ].HC, Bonds[ 1 ].HK );
+
+          for C in Star do C.Free;
+
+          Poin_.Free;
+
+          Bonds[ 0 ].HC.BindPoins;  // 星と共に消えたアンカーを張り直す
+          Bonds[ 1 ].HC.BindPoins;
+     end
+     else
+     begin
+          if Length( Links ) < 3 then Exit;  // 埋め戻しの種が張れない
+
+          S := -1;  // 種の3点目 = 先頭の2点と共線でない最初のリンク頂点（外積は倍精度で評価する）
+          for I := 2 to High( Links ) do
+          begin
+               if CrossProduct( ToD3( Links[ I ].Pos ) - ToD3( Links[ 0 ].Pos ), ToD3( Links[ 1 ].Pos ) - ToD3( Links[ 0 ].Pos ) ).Size2 > 0 then begin  S := I;  Break;  end;
+          end;
+
+          if S < 0 then Exit;  // リンクが共線（埋め戻し不能）
+
+          AC := _PoinInf.Cell;  AK := _PoinInf.Corn;  // 小さなドロネー図がアンカーを奪うので控えておく
+
+          if BuildMini( S ) and MatchSeams and FloodFills then
+          begin
+               for I := 0 to High( Bonds ) do with Bonds[ I ] do FC.Weld( FK, HC, HK );  // 縫い付け（回転コードは頂点の同一性から導かれる）
+
+               _PoinInf.Cell := AC;  _PoinInf.Corn := AK;  // 先に戻す（星と共に消えるなら、後の張り直しが引き受ける）
+
+               for C in Star do C.Free;  // 星を取り除き、
+
+               Poin_.Free;
+
+               for C in Minis do  // 埋め草（旗の付いた胞）はアンカーを張り直し、使わなかった胞は捨てる
+               begin
+                    if C.Flag <> 0 then begin  C.Flag := 0;  C.BindPoins;  end
+                                   else C.Free;
+               end;
+          end
+          else
+          begin
+               _PoinInf.Cell := AC;  _PoinInf.Corn := AK;  // 何も壊していない ―― 小さなドロネー図だけ消して戻る
+
+               for C in Minis do C.Free;
+
+               for C in Star do C.BindPoins;
+
+               Exit;
+          end;
+     end;
+
+     Result := True;
 end;
 
 //&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& protected
@@ -879,249 +1156,6 @@ end;
 //------------------------------------------------------------------------------
 
 function TDelaunay3D.DeletePoin( const Poin_:TDelaPoin3D ) :Boolean;
-type
-    TBond = record            // 穴の境界面（PA, PB, PC）と、その外側の胞（フック）・内側の埋め草
-      PA, PB, PC :TDelaPoin3D;
-      HC :TDelaCell3D;  HK :Byte;
-      FC :TDelaCell3D;  FK :Byte;
-    end;
-var
-   Star  :TArray<TDelaCell3D>;   // Poin_ の星（Poin_ を含む胞。取り除くと星型の穴が開く）
-   Bonds :TArray<TBond>;         // 穴の境界（星の胞ごとに、Poin_ の対面が1枚）
-   Links :TArray<TDelaPoin3D>;   // 有限のリンク頂点（重複なし）
-   Minis :TArray<TDelaCell3D>;   // リンク頂点だけの小さなドロネー図（同じ集合の中の独立した成分）
-   Fills :TArray<TDelaCell3D>;   // Minis のうち、穴を埋める胞
-   Hull  :Boolean;               // 穴が凸包に接しているか（リンクに無限遠頂点が現れるか）
-   AC :TDelaCell3D;    AK :Byte; // 無限遠頂点のアンカーの控え
-   C :TDelaCell3D;
-   I, S :Integer;
-//･･･････････････････････････････････････････
-     function Has( const Cs_:TArray<TDelaCell3D>; const C_:TDelaCell3D ) :Boolean;
-     var
-        I :Integer;
-     begin
-          for I := 0 to High( Cs_ ) do if Cs_[ I ] = C_ then Exit( True );
-
-          Result := False;
-     end;
-//･･･････････････････････････････････････････
-     function IsSeam( const C_:TDelaCell3D; const K_:Byte ) :Boolean;  // 胞のこの面は縫い目（境界面の内側）か
-     var
-        I :Integer;
-     begin
-          for I := 0 to High( Bonds ) do with Bonds[ I ] do if ( FC = C_ ) and ( FK = K_ ) then Exit( True );
-
-          Result := False;
-     end;
-//･･･････････････････････････････････････････
-     procedure CollectHole;  // 星・穴の境界・リンクを集める（アンカーから面渡りで広がる。構造を読むだけで、何も壊さない）
-     var
-        C :TDelaCell3D;
-        K, I :Byte;
-        B :TBond;
-        W :TDelaPoin3D;
-        J :Integer;
-        Known :Boolean;
-     begin
-          CollectStar( Poin_, Star );
-
-          for C in Star do
-          begin
-               K := Byte( C.CornOf( Poin_ ) );
-
-               B.PA := C.Poin[ VertTable[ K ]._[ 1 ] ];  // Poin_ の対面（正準順）
-               B.PB := C.Poin[ VertTable[ K ]._[ 2 ] ];
-               B.PC := C.Poin[ VertTable[ K ]._[ 3 ] ];
-               B.HC := C.Cell[ K ];
-               B.HK := C.Corn[ K ];
-               B.FC := nil;
-               B.FK := 0;
-
-               Bonds := Bonds + [ B ];
-
-               Hull := Hull or B.PA.Inf or B.PB.Inf or B.PC.Inf;
-
-               for I := 1 to 3 do  // リンク頂点を集める（無限遠頂点と重複は除く）
-               begin
-                    W := C.Poin[ VertTable[ K ]._[ I ] ];
-
-                    if W.Inf then Continue;
-
-                    Known := False;
-
-                    for J := 0 to High( Links ) do if Links[ J ] = W then begin  Known := True;  Break;  end;
-
-                    if not Known then Links := Links + [ W ];
-               end;
-          end;
-     end;
-//･･･････････････････････････････････････････
-     function MiniCells :TArray<TDelaCell3D>;  // 小さなドロネー図の全胞（成分の接続を辿って集める）
-     var
-        I :Integer;
-        K :Byte;
-        N :TDelaCell3D;
-     begin
-          Result := [ Links[ 0 ].Cell ];  // 種の頂点のアンカーは、胞が張り直されるたびに更新されて常に成分内を指す
-
-          I := 0;
-          while I < Length( Result ) do
-          begin
-               for K := 0 to 3 do
-               begin
-                    N := Result[ I ].Cell[ K ];
-
-                    if not Has( Result, N ) then Result := Result + [ N ];
-               end;
-
-               Inc( I );
-          end;
-     end;
-//･･･････････････････････････････････････････
-     function BuildMini( const S_:Integer ) :Boolean;  // リンク頂点だけの小さなドロネー図を、同じ集合の中に逐次添加法で作る
-     var                                               // （入れ子の TDelaunay3D は作らない。胞は同じ集合が所有する別成分になる）
-        I, Rest :Integer;
-        P :TDelaPoin3D;
-        C, H :TDelaCell3D;
-        Done :TArray<Boolean>;
-        Progress :Boolean;
-     begin
-          Result := False;
-
-          SeedCells( Links[ 0 ], Links[ 1 ], Links[ S_ ] );
-
-          SetLength( Done, Length( Links ) );
-
-          Done[ 0 ] := True;  Done[ 1 ] := True;  Done[ S_ ] := True;
-
-          Rest := Length( Links ) - 3;
-
-          repeat  // 挿入が新たな胞を張ると、種の平面上などで見送られた頂点が入れるようになるので、
-                  // 挿入が起きなくなるまで繰り返す（有界なローカル構築の順序調整）
-                Progress := False;
-
-                for I := 2 to High( Links ) do
-                begin
-                     if Done[ I ] then Continue;
-
-                     P := Links[ I ];
-
-                     H := nil;  // 位置検索は総当たりでよい（成分はリンクの大きさしかない）
-
-                     for C in MiniCells do
-                     begin
-                          if C.IsHitSphere( P.Pos ) then begin  H := C;  Break;  end;
-                     end;
-
-                     if H = nil then Continue;
-
-                     InsertPoin( P, H );
-
-                     Done[ I ] := True;  Dec( Rest );  Progress := True;
-                end;
-          until not Progress;
-
-          if Rest > 0 then Exit;  // 退化（どの外接球にも入らない頂点が残った）→ 埋め戻し不能
-
-          Minis := MiniCells;
-
-          Result := True;
-     end;
-//･･･････････････････････････････････････････
-     function MatchSeams :Boolean;  // 境界面と同じ頂点集合を持ち、外側の胞に鏡像の向きで貼り合わせられる胞（＝穴の側）を探す
-     var
-        I, J :Integer;
-        C :TDelaCell3D;
-        A, B, D :Shortint;
-        K :Byte;
-     begin
-          Result := False;
-
-          for I := 0 to High( Bonds ) do
-          begin
-               with Bonds[ I ] do
-               begin
-                    for J := 0 to High( Minis ) do
-                    begin
-                         C := Minis[ J ];
-
-                         A := C.CornOf( PA );
-                         B := C.CornOf( PB );
-                         D := C.CornOf( PC );
-
-                         if ( A < 0 ) or ( B < 0 ) or ( D < 0 ) then Continue;
-
-                         K := Byte( 6 - A - B - D );  // 3頂点を除いた残りの1隅 ＝ 境界面の対頂点
-
-                         if C.CanWeld( K, HC, HK ) then begin  FC := C;  FK := K;  end;  // 面を共有する2胞のうち、
-                    end;                                                                 // 鏡像で貼り合う側だけが通る
-
-                    if FC = nil then Exit;  // 境界面が現れない（共球の同数で別の対角が選ばれた等）→ 埋め戻し不能
-               end;
-          end;
-
-          for I := 1 to High( Bonds ) do  // 同じ縫い目が2枚の境界面に割り当たる退化（潰れた穴）も埋め戻し不能
-          begin
-               for J := 0 to I-1 do
-               begin
-                    if ( Bonds[ I ].FC = Bonds[ J ].FC ) and ( Bonds[ I ].FK = Bonds[ J ].FK ) then Exit;
-               end;
-          end;
-
-          Result := True;
-     end;
-//･･･････････････････････････････････････････
-     function FloodFills :Boolean;  // 埋め草から縫い目を越えずに広がり、閉包の境界が穴の境界と一致することを確かめる
-     var
-        I :Integer;
-        K, K2 :Byte;
-        C, N :TDelaCell3D;
-     begin
-          Result := False;
-
-          Fills := [];
-
-          for I := 0 to High( Bonds ) do
-          begin
-               if not Has( Fills, Bonds[ I ].FC ) then Fills := Fills + [ Bonds[ I ].FC ];
-          end;
-
-          I := 0;
-          while I < Length( Fills ) do
-          begin
-               C := Fills[ I ];
-
-               for K := 0 to 3 do
-               begin
-                    if IsSeam( C, K ) then Continue;  // 縫い目は越えない
-
-                    N := C.Cell[ K ];
-
-                    if not Has( Fills, N ) then Fills := Fills + [ N ];
-               end;
-
-               Inc( I );
-          end;
-
-          for I := 0 to High( Fills ) do  // 無限遠胞が埋め草になるのは、穴が凸包に接しているときだけ
-          begin
-               if ( Fills[ I ].InfCorn >= 0 ) and not Hull then Exit;
-          end;
-
-          for I := 0 to High( Bonds ) do  // 縫い目の外側は、捨てられる胞か、それ自身も縫い目（穴が自分と接する退化）で
-          begin                           // なければならない ―― これで閉包の境界が穴の境界とちょうど一致する
-               with Bonds[ I ] do
-               begin
-                    N  := FC.Cell[ FK ];
-                    K2 := FC.Corn[ FK ];
-               end;
-
-               if Has( Fills, N ) and not IsSeam( N, K2 ) then Exit;
-          end;
-
-          Result := True;
-     end;
-//･･･････････････････････････････････････････
 begin
      Result := False;
 
@@ -1138,64 +1172,7 @@ begin
                Poin_.Free;
           end;
      else
-          Hull := False;
-
-          CollectHole;
-
-          if Length( Bonds ) = 2 then  // 星が2胞（鏡像対）：境界面2枚は同じ面の裏表 → 外側どうしを直接貼り合わせる
-          begin
-               if not Bonds[ 0 ].HC.CanWeld( Bonds[ 0 ].HK, Bonds[ 1 ].HC, Bonds[ 1 ].HK ) then Exit;
-
-               Bonds[ 0 ].HC.Weld( Bonds[ 0 ].HK, Bonds[ 1 ].HC, Bonds[ 1 ].HK );
-
-               for C in Star do C.Free;
-
-               Poin_.Free;
-
-               Bonds[ 0 ].HC.BindPoins;  // 星と共に消えたアンカーを張り直す
-               Bonds[ 1 ].HC.BindPoins;
-          end
-          else
-          begin
-               if Length( Links ) < 3 then Exit;  // 埋め戻しの種が張れない
-
-               S := -1;  // 種の3点目 = 先頭の2点と共線でない最初のリンク頂点（外積は倍精度で評価する）
-               for I := 2 to High( Links ) do
-               begin
-                    if CrossProduct( ToD3( Links[ I ].Pos ) - ToD3( Links[ 0 ].Pos ), ToD3( Links[ 1 ].Pos ) - ToD3( Links[ 0 ].Pos ) ).Size2 > 0 then begin  S := I;  Break;  end;
-               end;
-
-               if S < 0 then Exit;  // リンクが共線（埋め戻し不能）
-
-               AC := _PoinInf.Cell;  AK := _PoinInf.Corn;  // 小さなドロネー図がアンカーを奪うので控えておく
-
-               if BuildMini( S ) and MatchSeams and FloodFills then
-               begin
-                    for I := 0 to High( Bonds ) do  // 縫い付け（回転コードは頂点の同一性から導かれる）
-                    begin
-                         with Bonds[ I ] do FC.Weld( FK, HC, HK );
-                    end;
-
-                    _PoinInf.Cell := AC;  _PoinInf.Corn := AK;  // 先に戻す（星と共に消えるなら、後の張り直しが引き受ける）
-
-                    for C in Star  do C.Free;                              // 星を取り除き、
-                    for C in Minis do if not Has( Fills, C ) then C.Free;  // 使わなかった埋め草を捨てる
-
-                    Poin_.Free;
-
-                    for C in Fills do C.BindPoins;  // 埋め草に現れる頂点（全リンク頂点）のアンカーを張り直す
-               end
-               else
-               begin
-                    _PoinInf.Cell := AC;  _PoinInf.Corn := AK;  // 何も壊していない ―― 小さなドロネー図だけ消して戻る
-
-                    for C in MiniCells do C.Free;
-
-                    for C in Star do C.BindPoins;
-
-                    Exit;
-               end;
-          end;
+          if not RemovePoin( Poin_ ) then Exit;  // 退化配置で埋め戻せなければ、何も変えずに False
      end;
 
      _OnChange.Run( Self );
