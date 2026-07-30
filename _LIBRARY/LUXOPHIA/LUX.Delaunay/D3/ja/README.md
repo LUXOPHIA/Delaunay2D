@@ -145,52 +145,52 @@ a X + b Y + c Z + d U + e W = 0
 ```
 継承関係
 
-・TTetraPoin3D<TDelaCell3D>                      ：(LUX)
+・TTetraPoin3D<TDelaCell3D>    ：(LUX)
   ┗・TDelaPoin3D
      ┗・TDelaPoin3DInf
 
-・TTetraPoinSet3D<TDelaPoin3D>                   ：(LUX)
+・TTetraPoinSet3D<TDelaPoin3D>    ：(LUX)
   ┗・TDelaPoinSet3D
 
-・TTetraCell3D<TDelaPoin3D,TDelaCell3D>          ：(LUX)
+・TTetraCell3D<TDelaPoin3D,TDelaCell3D>    ：(LUX)
   ┗・TDelaCell3D
 
 ・TTetraCellSet3D<TDelaCell3D,TDelaPoinSet3D>    ：(LUX)
   ┗・TDelaCellSet3D
      ┗・TDelaunay3D
 
-・TControl3D                                     ：(FMX)
+・TControl3D    ：(FMX)
   ┗・TDelaunayLayer
      ┣・TDelaunayEdges
      ┗・TDelaunayVoros
 
-・TViewport3D                                    ：(FMX)
+・TViewport3D    ：(FMX)
   ┗・TDelaunayViewport
 
-・TFrame                                         ：(FMX)
+・TFrame    ：(FMX)
   ┗・TDelaunayViewer
 
 所有・参照関係
 
-・TDelaunay3D                                    ：( = TDelaCellSet3D = 胞集合そのもの )
-  ┣・Poins    :TDelaPoinSet3D
+・TDelaunay3D    ：( = TDelaCellSet3D = 胞集合そのもの )
+  ┣・Poins :TDelaPoinSet3D
   ┃  ┗・1..* TDelaPoin3D
   ┃     ┣・Pos
-  ┃     ┗・Cell, Corn                          ：アンカー
-  ┣・Cells    :TDelaCellSet3D                   ：( = Self )
+  ┃     ┗・Cell, Corn    ：アンカー
+  ┣・Cells :TDelaCellSet3D    ：( = Self )
   ┃  ┗・1..* TDelaCell3D
-  ┃     ┣・Poin[0..3]                          ：正の向き。無限遠胞はここに PoinInf を持つ
-  ┃     ┣・Cell[0..3]                          ：隣接胞
+  ┃     ┣・Poin[0..3]    ：正の向き。無限遠胞はここに PoinInf を持つ
+  ┃     ┣・Cell[0..3]    ：隣接胞
   ┃     ┗・Corn / Bond / Join
-  ┣・PoinInf  :TDelaPoin3DInf                   ：全ての無限遠胞が共有
-  ┗・OnChange :TDelegates                       ：ビューアへ通知
+  ┣・PoinInf :TDelaPoin3DInf    ：全ての無限遠胞が共有
+  ┗・OnChange :TDelegates    ：ビューアへ通知
 
 ・TDelaunayViewer
   ┗・Viewport :TDelaunayViewport
-     ┣・TDummy                                  ：ヨー
-     ┃  ┗・TDummy                              ：ピッチ
+     ┣・TDummy    ：ヨー
+     ┃  ┗・TDummy    ：ピッチ
      ┃     ┣・TCamera
-     ┃     ┗・TLight                           ：ヘッドライト
+     ┃     ┗・TLight    ：ヘッドライト
      ┣・TDelaunayEdges
      ┗・TDelaunayVoros
 ```
@@ -199,21 +199,21 @@ a X + b Y + c Z + d U + e W = 0
 
 ```
 ・D3/
-  ┣・LUX.Delaunay.D3.pas                  ：unit LUX.Delaunay.D3
-  ┃  ┣・TDelaPoin3D                      ：頂点: Inf, Lift, InSphered
-  ┃  ┣・TDelaPoin3DInf                   ：無限遠頂点: Lift ≡ ( 0, 0, 0, 1 )
-  ┃  ┣・TDelaPoinSet3D                   ：点集合（有限頂点のみ）
-  ┃  ┣・TDelaCell3D                      ：四面体: InfCorn, Circum, InSphere, IsHitSphere
-  ┃  ┣・TDelaCellSet3D                   ：胞集合
-  ┃  ┗・TDelaunay3D                      ：モデル: AddPoin / DeletePoin / クエリ / 入出力
+  ┣・LUX.Delaunay.D3.pas    ：unit LUX.Delaunay.D3
+  ┃  ┣・TDelaPoin3D    ：頂点: Inf, Lift, InSphered
+  ┃  ┣・TDelaPoin3DInf    ：無限遠頂点: Lift ≡ ( 0, 0, 0, 1 )
+  ┃  ┣・TDelaPoinSet3D    ：点集合（有限頂点のみ）
+  ┃  ┣・TDelaCell3D    ：四面体: InfCorn, Circum, InSphere, IsHitSphere
+  ┃  ┣・TDelaCellSet3D    ：胞集合
+  ┃  ┗・TDelaunay3D    ：モデル: AddPoin / DeletePoin / クエリ / 入出力
   ┣・LUX.Delaunay.D3.Viewer.pas / .fmx    ：unit LUX.Delaunay.D3.Viewer
-  ┃  ┣・TDelaunayLayer                   ：レイヤの基底: メッシュの器と材質、Render
-  ┃  ┣・TDelaunayEdges                   ：ドロネー辺（多角形の管）
-  ┃  ┣・TDelaunayVoros                   ：ボロノイ辺（三角柱と錐）
-  ┃  ┣・TDelaunayViewport                ：内部の TViewport3D
-  ┃  ┗・TDelaunayViewer                  ：TFrame 本体（軌道リグ・ヘッドライト・ピッキング）
-  ┣・README.md                            ：英語版
-  ┗・ja/README.md                         ：本ドキュメント
+  ┃  ┣・TDelaunayLayer    ：レイヤの基底: メッシュの器と材質、Render
+  ┃  ┣・TDelaunayEdges    ：ドロネー辺（多角形の管）
+  ┃  ┣・TDelaunayVoros    ：ボロノイ辺（三角柱と錐）
+  ┃  ┣・TDelaunayViewport    ：内部の TViewport3D
+  ┃  ┗・TDelaunayViewer    ：TFrame 本体（軌道リグ・ヘッドライト・ピッキング）
+  ┣・README.md    ：英語版
+  ┗・ja/README.md    ：本ドキュメント
 ```
 
 [LUX](https://github.com/LUXOPHIA/LUX) の TetraFlip メッシュ層（`LUX.Data.Model.TetraFlip.core`・`LUX.Data.Model.TetraFlip.D3`）の上に構築されています。これらの層が点と胞を所有し、接続構造・角と回転の巡回表（`VertTable` / `BondTable`）・面の縫合（`Weld` / `CanWeld`）・隣接検査（`CheckCells`）・列挙を担います。`LUX.Delaunay.D3` はドロネー固有の機能だけを加え、TetraFlip の型付け層には自分の派生クラスを型引数として与えます。
