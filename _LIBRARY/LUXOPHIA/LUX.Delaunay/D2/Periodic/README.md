@@ -157,28 +157,28 @@ d_{\mathbb{T}}(a,b)^2 = \min_{\lambda \in \Lambda} \lVert a - b + \lambda \rVert
 ```
 Inheritance
 
-・TTriPoin2D<TPeriFace2D>    ：(LUX)
+・TTriPoin2D<TPeriFace2D>                   ･･･ (LUX)
   ┗・TPeriPoin2D
      ┗・Site
 
-・TTriPoinSet2D<TPeriPoin2D>    ：(LUX)
+・TTriPoinSet2D<TPeriPoin2D>                ･･･ (LUX)
   ┗・TPeriPoinSet2D
 
-・TTriFace2D<TPeriPoin2D,TPeriFace2D>    ：(LUX)
+・TTriFace2D<TPeriPoin2D,TPeriFace2D>       ･･･ (LUX)
   ┗・TPeriFace2D
-     ┣・Off[1..3]    ：lattice offsets
+     ┣・Off[1..3]                          ･･･ lattice offsets
      ┣・CornGrid / CornPos
      ┣・CircumD / CircumPos / CircumRadius
      ┗・NeigShift
 
-・TTriFaceSet2D<TPeriFace2D,TPeriPoinSet2D>    ：(LUX)
+・TTriFaceSet2D<TPeriFace2D,TPeriPoinSet2D> ･･･ (LUX)
   ┗・TPeriFaceSet2D
      ┗・TPeriDelaunay2D
 
-・TFrame    ：(FMX)
+・TFrame                                    ･･･ (FMX)
   ┗・TPeriDelaunayViewer
 
-・TCGLayer    ：(LUX.CG2D)
+・TCGLayer                                  ･･･ (LUX.CG2D)
   ┣・TPeriDelaunayTrias
   ┣・TPeriDelaunayCircs
   ┣・TPeriDelaunayVolos
@@ -187,31 +187,31 @@ Inheritance
 
 Ownership and references
 
-・TPeriDelaunay2D    ：( = TPeriFaceSet2D = the faces )
+・TPeriDelaunay2D                           ･･･ ( = TPeriFaceSet2D = the faces )
   ┣・Poins :TPeriPoinSet2D
-  ┃  ┗・1..1 TPeriPoin2D    ：1:1 with sites
-  ┃     ┣・Pos    ：canonical, on grid
-  ┃     ┗・Site    ：index
-  ┣・Faces :TPeriFaceSet2D    ：( = Self )
+  ┃  ┗・1..1 TPeriPoin2D                  ･･･ 1:1 with sites
+  ┃     ┣・Pos                            ･･･ canonical, on grid
+  ┃     ┗・Site                           ･･･ index
+  ┣・Faces :TPeriFaceSet2D                 ･･･ ( = Self )
   ┃  ┗・2n TPeriFace2D
-  ┃     ┣・Poin[1..3]    ：may repeat
-  ┃     ┣・Off [1..3]    ：∈ {0,1,2}²
+  ┃     ┣・Poin[1..3]                     ･･･ may repeat
+  ┃     ┣・Off [1..3]                     ･･･ ∈ {0,1,2}²
   ┃     ┗・Face[1..3], Corn[1..3]
-  ┣・Size :Single    ：L, snapped to the grid
-  ┣・Site[] :TSingle2D    ：canonical site coords
+  ┣・Size :Single                          ･･･ L, snapped to the grid
+  ┣・Site[] :TSingle2D                     ･･･ canonical site coords
   ┣・SitePoin[] :TPeriPoin2D
-  ┣・LocalDelN / RebuildDelN / StarInsN    ：statistics
-  ┗・OnChange :TDelegates    ：notifies the viewer
+  ┣・LocalDelN / RebuildDelN / StarInsN    ･･･ statistics
+  ┗・OnChange :TDelegates                  ･･･ notifies the viewer
 
 ・TPeriDelaunayViewer
-  ┗・Layers :TCGLayers    ：creation order = drawing order (bottom to top)
-     ┣・Trias (copies)    ：bottom
+  ┗・Layers :TCGLayers                     ･･･ creation order = drawing order
+     ┣・Trias (copies)                     ･･･ bottom
      ┣・Trias (core)
      ┣・Circs
      ┣・Grids
      ┣・Volos
      ┣・Poins (copies)
-     ┣・Poins (core)    ：top
+     ┣・Poins (core)                       ･･･ top
      ┗・TCGCamera layer
 ```
 
@@ -219,19 +219,19 @@ Ownership and references
 
 ```
 ・D2/Periodic/
-  ┣・LUX.Delaunay.D2.Periodic.pas    ：unit LUX.Delaunay.D2.Periodic
-  ┃  ┣・TInt128 / Acc128 / Sign128    ：128-bit exact in-circle accumulation
-  ┃  ┣・OrientG / InCircleSign / InCirclePert    ：predicates + site-rank SoS
-  ┃  ┣・TPeriPoin2D    ：vertex, 1:1 with sites (Site)
-  ┃  ┣・TPeriPoinSet2D    ：vertex set
-  ┃  ┣・TPeriFace2D    ：triangle: per-corner offsets, lifted geometry
-  ┃  ┣・TPeriFaceSet2D    ：face set
-  ┃  ┗・TPeriDelaunay2D    ：the model: AddPoin / DeletePoin / queries
-  ┣・LUX.Delaunay.D2.Periodic.Viewer.pas / .fmx    ：viewer unit
-  ┃  ┣・TPeriDelaunayTrias / Circs / Volos / Grids / Poins    ：scene layers
-  ┃  ┗・TPeriDelaunayViewer    ：the TFrame
-  ┣・README.md    ：this document
-  ┗・ja/README.md    ：Japanese translation
+  ┣・LUX.Delaunay.D2.Periodic.pas                           ･･･ the model unit
+  ┃  ┣・TInt128 / Acc128 / Sign128                         ･･･ exact in-circle
+  ┃  ┣・OrientG / InCircleSign / InCirclePert              ･･･ predicates+SoS
+  ┃  ┣・TPeriPoin2D                                        ･･･ 1:1 with sites
+  ┃  ┣・TPeriPoinSet2D                                     ･･･ vertex set
+  ┃  ┣・TPeriFace2D                                        ･･･ corner offsets
+  ┃  ┣・TPeriFaceSet2D                                     ･･･ face set
+  ┃  ┗・TPeriDelaunay2D                                    ･･･ the model
+  ┣・LUX.Delaunay.D2.Periodic.Viewer.pas / .fmx             ･･･ viewer unit
+  ┃  ┣・TPeriDelaunayTrias / Circs / Volos / Grids / Poins ･･･ scene layers
+  ┃  ┗・TPeriDelaunayViewer                                ･･･ the TFrame
+  ┣・README.md                                              ･･･ this document
+  ┗・ja/README.md                                           ･･･ in Japanese
 ```
 
 Built on the same TriFlip mesh layers of [LUX](https://github.com/LUXOPHIA/LUX) as the planar model (`LUX.Data.Model.TriFlip.core`, `LUX.Data.Model.TriFlip.D2`), which own the points and faces and provide the connectivity, the corner tables (`VertTableInc` / `VertTableDec`) and the iteration.

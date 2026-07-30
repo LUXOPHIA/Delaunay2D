@@ -120,34 +120,34 @@ V = n, \quad E = 3n, \quad F = 2n
 基盤ライブラリ
 
 ・LUX
-  ┣・LUX.D2 / LUX.D3 / LUX.D4    ：ベクトル
-  ┣・LUX.Data.Model.TriFlip.*    ：2D メッシュ
-  ┗・LUX.Data.Model.TetraFlip.*    ：3D メッシュ
+  ┣・LUX.D2 / LUX.D3 / LUX.D4   ･･･ ベクトル
+  ┣・LUX.Data.Model.TriFlip.*   ･･･ 2D メッシュ
+  ┗・LUX.Data.Model.TetraFlip.* ･･･ 3D メッシュ
 
 LUX 上に構築されるパッケージ（各モデルパッケージと、そのビューア）
 
-・LUX.Delaunay.D2    ：∞ 頂点・E²
+・LUX.Delaunay.D2                ･･･ ∞ 頂点・E²
   ┣・TDelaunay2D
   ┣・TDelaPoin2D
   ┣・TDelaPoin2DInf
   ┣・TDelaFace2D
   ┗・LUX.Delaunay.D2.Viewer
-     ┗・TDelaunayViewer    ：(LUX.CG2D / Skia)
+     ┗・TDelaunayViewer         ･･･ (LUX.CG2D / Skia)
 
-・LUX.Delaunay.D2.Periodic    ：トーラス・最小表現・T²
+・LUX.Delaunay.D2.Periodic       ･･･ トーラス・最小表現・T²
   ┣・TPeriDelaunay2D
   ┣・TPeriPoin2D
   ┣・TPeriFace2D
   ┗・LUX.Delaunay.D2.Periodic.Viewer
-     ┗・TPeriDelaunayViewer    ：(LUX.CG2D / Skia)
+     ┗・TPeriDelaunayViewer     ･･･ (LUX.CG2D / Skia)
 
-・LUX.Delaunay.D3    ：∞ 頂点・E³
+・LUX.Delaunay.D3                ･･･ ∞ 頂点・E³
   ┣・TDelaunay3D
   ┣・TDelaPoin3D
   ┣・TDelaPoin3DInf
   ┣・TDelaCell3D
   ┗・LUX.Delaunay.D3.Viewer
-     ┗・TDelaunayViewer    ：(FMX TViewport3D)
+     ┗・TDelaunayViewer         ･･･ (FMX TViewport3D)
 ```
 
 `TDelaunay2D` と `TPeriDelaunay2D` はいずれも [LUX](https://github.com/LUXOPHIA/LUX) の TriFlip 三角形メッシュ層の派生、`TDelaunay3D` は TetraFlip 四面体メッシュ層の派生です。これらの層が点と胞の所有・接続構造（`Poin` / `Face` または `Cell` / `Corn` / `Bond`）・角の巡回表・facet の縫合・列挙を担い、各 `LUX.Delaunay.*` ユニットはドロネー固有の機能だけを加えます。
@@ -156,21 +156,21 @@ LUX 上に構築されるパッケージ（各モデルパッケージと、そ�
 
 ```
 ・LUX.Delaunay/
-  ┣・README.md    ：英語版
-  ┣・ja/README.md    ：本ドキュメント
-  ┣・LICENSE    ：MIT
-  ┣・D2/    ：2D ユークリッド平面
-  ┃  ┣・LUX.Delaunay.D2.pas    ：TDelaunay2D ― E² の三角形分割
-  ┃  ┣・LUX.Delaunay.D2.Viewer.pas / .fmx    ：TDelaunayViewer ― Skia 2D
-  ┃  ┣・README.md , ja/README.md    ：パッケージのドキュメント
-  ┃  ┗・Periodic/    ：2D 平坦トーラス
-  ┃     ┣・LUX.Delaunay.D2.Periodic.pas    ：TPeriDelaunay2D ― T²
-  ┃     ┣・LUX.Delaunay.D2.Periodic.Viewer.pas/.fmx    ：TPeriDelaunayViewer
-  ┃     ┗・README.md , ja/README.md    ：パッケージのドキュメント
-  ┗・D3/    ：3D ユークリッド空間
-     ┣・LUX.Delaunay.D3.pas    ：TDelaunay3D ― E³ の四面体分割
-     ┣・LUX.Delaunay.D3.Viewer.pas / .fmx    ：TDelaunayViewer ― Viewport3D
-     ┗・README.md , ja/README.md    ：パッケージのドキュメント
+  ┣・README.md                                       ･･･ 英語版
+  ┣・ja/README.md                                    ･･･ 本ドキュメント
+  ┣・LICENSE                                         ･･･ MIT
+  ┣・D2/                                             ･･･ 2D ユークリッド平面
+  ┃  ┣・LUX.Delaunay.D2.pas                         ･･･ TDelaunay2D ― E²
+  ┃  ┣・LUX.Delaunay.D2.Viewer.pas / .fmx           ･･･ TDelaunayViewer (Skia)
+  ┃  ┣・README.md , ja/README.md                    ･･･ パッケージの文書
+  ┃  ┗・Periodic/                                   ･･･ 2D 平坦トーラス
+  ┃     ┣・LUX.Delaunay.D2.Periodic.pas             ･･･ TPeriDelaunay2D ― T²
+  ┃     ┣・LUX.Delaunay.D2.Periodic.Viewer.pas/.fmx ･･･ TPeriDelaunayViewer
+  ┃     ┗・README.md , ja/README.md                 ･･･ パッケージの文書
+  ┗・D3/                                             ･･･ 3D ユークリッド空間
+     ┣・LUX.Delaunay.D3.pas                          ･･･ TDelaunay3D ― E³
+     ┣・LUX.Delaunay.D3.Viewer.pas / .fmx            ･･･ TDelaunayViewer (FMX)
+     ┗・README.md , ja/README.md                     ･･･ パッケージの文書
 ```
 
 ### 3.3 依存関係

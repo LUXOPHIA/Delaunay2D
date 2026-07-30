@@ -159,24 +159,24 @@ a X + b Y + c Z + e W = 0
 ```
 継承関係
 
-・TTriPoin2D<TDelaFace2D>    ：(LUX)
+・TTriPoin2D<TDelaFace2D>                   ･･･ (LUX)
   ┗・TDelaPoin2D
      ┗・TDelaPoin2DInf
 
-・TTriPoinSet2D<TDelaPoin2D>    ：(LUX)
+・TTriPoinSet2D<TDelaPoin2D>                ･･･ (LUX)
   ┗・TDelaPoinSet2D
 
-・TTriFace2D<TDelaPoin2D,TDelaFace2D>    ：(LUX)
+・TTriFace2D<TDelaPoin2D,TDelaFace2D>       ･･･ (LUX)
   ┗・TDelaFace2D
 
-・TTriFaceSet2D<TDelaFace2D,TDelaPoinSet2D>    ：(LUX)
+・TTriFaceSet2D<TDelaFace2D,TDelaPoinSet2D> ･･･ (LUX)
   ┗・TDelaFaceSet2D
      ┗・TDelaunay2D
 
-・TFrame    ：(FMX)
+・TFrame                                    ･･･ (FMX)
   ┗・TDelaunayViewer
 
-・TCGLayer    ：(LUX.CG2D)
+・TCGLayer                                  ･･･ (LUX.CG2D)
   ┣・TDelaunayTrias
   ┣・TDelaunayCircs
   ┣・TDelaunayVolos
@@ -184,25 +184,25 @@ a X + b Y + c Z + e W = 0
 
 所有・参照関係
 
-・TDelaunay2D    ：( = TDelaFaceSet2D = 面集合そのもの )
+・TDelaunay2D                               ･･･ ( = TDelaFaceSet2D = 面集合 )
   ┣・Poins :TDelaPoinSet2D
   ┃  ┗・1..* TDelaPoin2D
   ┃     ┣・Pos
-  ┃     ┗・Face, Corn    ：アンカー
-  ┣・Faces :TDelaFaceSet2D    ：( = Self )
+  ┃     ┗・Face, Corn                     ･･･ アンカー
+  ┣・Faces :TDelaFaceSet2D                 ･･･ ( = Self )
   ┃  ┗・1..* TDelaFace2D
-  ┃     ┣・Poin[1..3]    ：反時計回り。無限遠面はここに PoinInf を持つ
-  ┃     ┣・Face[1..3]    ：隣接面
+  ┃     ┣・Poin[1..3]                     ･･･ 反時計回り。無限遠面には PoinInf
+  ┃     ┣・Face[1..3]                     ･･･ 隣接面
   ┃     ┗・Corn[1..3]
-  ┣・PoinInf :TDelaPoin2DInf    ：全ての無限遠面が共有
-  ┗・OnChange :TDelegates    ：ビューアへ通知
+  ┣・PoinInf :TDelaPoin2DInf               ･･･ 全ての無限遠面が共有
+  ┗・OnChange :TDelegates                  ･･･ ビューアへ通知
 
 ・TDelaunayViewer
-  ┗・Layers :TCGLayers    ：生成順が描画順（下から上へ）
-     ┣・TDelaunayTrias    ：最下
+  ┗・Layers :TCGLayers                     ･･･ 生成順が描画順
+     ┣・TDelaunayTrias                     ･･･ 最下
      ┣・TDelaunayCircs
      ┣・TDelaunayVolos
-     ┣・TDelaunayPoins    ：最上
+     ┣・TDelaunayPoins                     ･･･ 最上
      ┗・TCGCamera のレイヤ
 ```
 
@@ -210,19 +210,19 @@ a X + b Y + c Z + e W = 0
 
 ```
 ・D2/
-  ┣・LUX.Delaunay.D2.pas    ：unit LUX.Delaunay.D2
-  ┃  ┣・TDelaPoin2D    ：頂点: Inf, Lift, InCircled
-  ┃  ┣・TDelaPoin2DInf    ：無限遠頂点: Lift ≡ ( 0, 0, 1 )
-  ┃  ┣・TDelaPoinSet2D    ：点集合（有限頂点のみ）
-  ┃  ┣・TDelaFace2D    ：三角形: InfCorn, Circum, InCircle, IsHitCircle
-  ┃  ┣・TDelaFaceSet2D    ：面集合
-  ┃  ┗・TDelaunay2D    ：モデル: AddPoin / DeletePoin / クエリ / 入出力
-  ┣・LUX.Delaunay.D2.Viewer.pas / .fmx    ：unit LUX.Delaunay.D2.Viewer
-  ┃  ┣・TDelaunayTrias / Circs / Volos / Poins    ：LUX.CG2D のシーンレイヤ
-  ┃  ┗・TDelaunayViewer    ：TFrame 本体
-  ┣・README.md    ：英語版
-  ┣・ja/README.md    ：本ドキュメント
-  ┗・Periodic/    ：LUX.Delaunay.D2.Periodic ― 平坦トーラス版
+  ┣・LUX.Delaunay.D2.pas                        ･･･ unit LUX.Delaunay.D2
+  ┃  ┣・TDelaPoin2D                            ･･･ 頂点: Lift, InCircled
+  ┃  ┣・TDelaPoin2DInf                         ･･･ ∞: Lift ≡ ( 0, 0, 1 )
+  ┃  ┣・TDelaPoinSet2D                         ･･･ 点集合（有限頂点のみ）
+  ┃  ┣・TDelaFace2D                            ･･･ 三角形: InfCorn, Circum
+  ┃  ┣・TDelaFaceSet2D                         ･･･ 面集合
+  ┃  ┗・TDelaunay2D                            ･･･ モデル: AddPoin/DeletePoin
+  ┣・LUX.Delaunay.D2.Viewer.pas / .fmx          ･･･ unit LUX.Delaunay.D2.Viewer
+  ┃  ┣・TDelaunayTrias / Circs / Volos / Poins ･･･ LUX.CG2D のシーンレイヤ
+  ┃  ┗・TDelaunayViewer                        ･･･ TFrame 本体
+  ┣・README.md                                  ･･･ 英語版
+  ┣・ja/README.md                               ･･･ 本ドキュメント
+  ┗・Periodic/                                  ･･･ 平坦トーラス版
 ```
 
 [LUX](https://github.com/LUXOPHIA/LUX) の TriFlip メッシュ層（`LUX.Data.Model.TriFlip.core`・`LUX.Data.Model.TriFlip.D2`）の上に構築されています。これらの層が点と面を所有し、接続構造・角の巡回表（`VertTableInc` / `VertTableDec`）・辺の縫合・隣接検査（`CheckEdges`）・列挙を担います。`LUX.Delaunay.D2` はドロネー固有の機能だけを加え、TriFlip の型付け層には自分の派生クラスを型引数として与えます。
