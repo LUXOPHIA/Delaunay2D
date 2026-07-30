@@ -3,6 +3,11 @@
 
 Delaunay complexes for Delphi: triangulations of the Euclidean plane, tetrahedralizations of Euclidean 3-space, and triangulations of the flat torus. Every diagram accepts insertion **and** deletion of sites at any time, and is a valid Delaunay complex after each operation. Released under the [MIT License](LICENSE).
 
+## 利用ライブラリ
+
+* [**LUX**](https://github.com/LUXOPHIA/LUX) ：Base library providing the vector types (`LUX.D2` … `LUX.D4`), delegates, lists and the TriFlip / TetraFlip mesh models (`LUX.Data.Model.*`).
+* [**LUX.CG2D**](https://github.com/LUXOPHIA/LUX.CG2D) ：2D scene graph on Skia4Delphi, used by the 2D viewers only.
+
 ## 1. Overview
 
 The library is organised as three independent models, each paired with a drop-in FireMonkey viewer frame.
