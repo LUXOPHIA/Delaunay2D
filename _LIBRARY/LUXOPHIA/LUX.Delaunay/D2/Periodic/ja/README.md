@@ -157,28 +157,28 @@ d_{\mathbb{T}}(a,b)^2 = \min_{\lambda \in \Lambda} \lVert a - b + \lambda \rVert
 ```
 継承関係
 
-・TTriPoin2D<TPeriFace2D>    ：(LUX)
+・TTriPoin2D<TPeriFace2D>                   ･･･ (LUX)
   ┗・TPeriPoin2D
      ┗・Site
 
-・TTriPoinSet2D<TPeriPoin2D>    ：(LUX)
+・TTriPoinSet2D<TPeriPoin2D>                ･･･ (LUX)
   ┗・TPeriPoinSet2D
 
-・TTriFace2D<TPeriPoin2D,TPeriFace2D>    ：(LUX)
+・TTriFace2D<TPeriPoin2D,TPeriFace2D>       ･･･ (LUX)
   ┗・TPeriFace2D
-     ┣・Off[1..3]    ：格子オフセット
+     ┣・Off[1..3]                          ･･･ 格子オフセット
      ┣・CornGrid / CornPos
      ┣・CircumD / CircumPos / CircumRadius
      ┗・NeigShift
 
-・TTriFaceSet2D<TPeriFace2D,TPeriPoinSet2D>    ：(LUX)
+・TTriFaceSet2D<TPeriFace2D,TPeriPoinSet2D> ･･･ (LUX)
   ┗・TPeriFaceSet2D
      ┗・TPeriDelaunay2D
 
-・TFrame    ：(FMX)
+・TFrame                                    ･･･ (FMX)
   ┗・TPeriDelaunayViewer
 
-・TCGLayer    ：(LUX.CG2D)
+・TCGLayer                                  ･･･ (LUX.CG2D)
   ┣・TPeriDelaunayTrias
   ┣・TPeriDelaunayCircs
   ┣・TPeriDelaunayVolos
@@ -187,31 +187,31 @@ d_{\mathbb{T}}(a,b)^2 = \min_{\lambda \in \Lambda} \lVert a - b + \lambda \rVert
 
 所有・参照関係
 
-・TPeriDelaunay2D    ：( = TPeriFaceSet2D = 面集合 )
+・TPeriDelaunay2D                           ･･･ ( = TPeriFaceSet2D = 面集合 )
   ┣・Poins :TPeriPoinSet2D
-  ┃  ┗・1..1 TPeriPoin2D    ：サイトと1対1
-  ┃     ┣・Pos    ：正準・格子上
-  ┃     ┗・Site    ：番号
-  ┣・Faces :TPeriFaceSet2D    ：( = Self )
+  ┃  ┗・1..1 TPeriPoin2D                  ･･･ サイトと1対1
+  ┃     ┣・Pos                            ･･･ 正準・格子上
+  ┃     ┗・Site                           ･･･ 番号
+  ┣・Faces :TPeriFaceSet2D                 ･･･ ( = Self )
   ┃  ┗・2n TPeriFace2D
-  ┃     ┣・Poin[1..3]    ：重複し得る
-  ┃     ┣・Off [1..3]    ：∈ {0,1,2}²
+  ┃     ┣・Poin[1..3]                     ･･･ 重複し得る
+  ┃     ┣・Off [1..3]                     ･･･ ∈ {0,1,2}²
   ┃     ┗・Face[1..3], Corn[1..3]
-  ┣・Size :Single    ：L（グリッドへスナップ）
-  ┣・Site[] :TSingle2D    ：サイトの正準座標
+  ┣・Size :Single                          ･･･ L（グリッドへスナップ）
+  ┣・Site[] :TSingle2D                     ･･･ サイトの正準座標
   ┣・SitePoin[] :TPeriPoin2D
-  ┣・LocalDelN / RebuildDelN / StarInsN    ：統計
-  ┗・OnChange :TDelegates    ：ビューアへ通知
+  ┣・LocalDelN / RebuildDelN / StarInsN    ･･･ 統計
+  ┗・OnChange :TDelegates                  ･･･ ビューアへ通知
 
 ・TPeriDelaunayViewer
-  ┗・Layers :TCGLayers    ：生成順が描画順（下から上へ）
-     ┣・Trias（コピー）    ：最下
+  ┗・Layers :TCGLayers                     ･･･ 生成順が描画順
+     ┣・Trias（コピー）                    ･･･ 最下
      ┣・Trias（実体）
      ┣・Circs
      ┣・Grids
      ┣・Volos
      ┣・Poins（コピー）
-     ┣・Poins（実体）    ：最上
+     ┣・Poins（実体）                      ･･･ 最上
      ┗・TCGCamera のレイヤ
 ```
 
@@ -219,19 +219,19 @@ d_{\mathbb{T}}(a,b)^2 = \min_{\lambda \in \Lambda} \lVert a - b + \lambda \rVert
 
 ```
 ・D2/Periodic/
-  ┣・LUX.Delaunay.D2.Periodic.pas    ：unit LUX.Delaunay.D2.Periodic
-  ┃  ┣・TInt128 / Acc128 / Sign128    ：厳密空円判定のための128ビット累算
-  ┃  ┣・OrientG / InCircleSign / InCirclePert    ：述語 ＋ サイト順位 SoS
-  ┃  ┣・TPeriPoin2D    ：頂点。サイトと1対1（Site）
-  ┃  ┣・TPeriPoinSet2D    ：点集合
-  ┃  ┣・TPeriFace2D    ：三角形: 角ごとのオフセット・リフト幾何
-  ┃  ┣・TPeriFaceSet2D    ：面集合
-  ┃  ┗・TPeriDelaunay2D    ：モデル: AddPoin / DeletePoin / クエリ
-  ┣・LUX.Delaunay.D2.Periodic.Viewer.pas / .fmx    ：ビューアのユニット
-  ┃  ┣・TPeriDelaunayTrias / Circs / Volos / Grids / Poins    ：シーンレイヤ
-  ┃  ┗・TPeriDelaunayViewer    ：TFrame 本体
-  ┣・README.md    ：英語版
-  ┗・ja/README.md    ：本ドキュメント
+  ┣・LUX.Delaunay.D2.Periodic.pas                           ･･･ 本体ユニット
+  ┃  ┣・TInt128 / Acc128 / Sign128                         ･･･ 厳密空円判定
+  ┃  ┣・OrientG / InCircleSign / InCirclePert              ･･･ 述語＋SoS
+  ┃  ┣・TPeriPoin2D                                        ･･･ サイトと1対1
+  ┃  ┣・TPeriPoinSet2D                                     ･･･ 点集合
+  ┃  ┣・TPeriFace2D                                        ･･･ 角のオフセット
+  ┃  ┣・TPeriFaceSet2D                                     ･･･ 面集合
+  ┃  ┗・TPeriDelaunay2D                                    ･･･ モデル本体
+  ┣・LUX.Delaunay.D2.Periodic.Viewer.pas / .fmx             ･･･ ビューア
+  ┃  ┣・TPeriDelaunayTrias / Circs / Volos / Grids / Poins ･･･ シーンレイヤ
+  ┃  ┗・TPeriDelaunayViewer                                ･･･ TFrame 本体
+  ┣・README.md                                              ･･･ 英語版
+  ┗・ja/README.md                                           ･･･ 本ドキュメント
 ```
 
 平面モデルと同じ [LUX](https://github.com/LUXOPHIA/LUX) の TriFlip メッシュ層（`LUX.Data.Model.TriFlip.core`・`LUX.Data.Model.TriFlip.D2`）の上に構築されています。これらの層が点と面を所有し、接続構造・角の巡回表（`VertTableInc` / `VertTableDec`）・列挙を担います。
